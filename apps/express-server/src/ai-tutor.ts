@@ -9,6 +9,11 @@ interface AiTutorData {
     code: string;
     input: string;
     output: string;
+    /**
+     * Optional display name of the user asking the question.
+     * Used so the AI can address the user personally.
+     */
+    userName?: string;
 }
 
 // System prompt to guide the AI's behavior
@@ -16,16 +21,18 @@ const systemPrompt = `You are an expert programming tutor. Your goal is to help 
 Analyze the user's code, their provided input, and the resulting output.
 Provide hints, ask leading questions, and explain concepts.
 Do not write the correct code for them unless they are completely stuck and explicitly ask for the solution.
-Keep your responses concise and encouraging.`;
+Keep your responses concise and encouraging.
+Always address the student by their name when it is provided, and keep a friendly, encouraging tone.`;
 
 /**
  * Constructs the full prompt for the AI based on the user's code and question.
- * @param data The code, input, output, and user's specific query.
+ * @param data The code, input, output, user's specific query, and optional name.
  * @returns The structured string query for the AI.
  */
 function constructUserQuery(data: AiTutorData): string {
     return `
 Here is my current situation:
+Student name: ${data.userName || "Student"}
 Language: ${data.language}
 Code:
 \`\`\`${data.language}

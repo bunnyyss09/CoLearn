@@ -82,7 +82,7 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" , block: "nearest"});
   }, [messages]);
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -104,15 +104,15 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
   };
 
   return (
-    <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200"} border-2 rounded-lg shadow-2xl flex flex-col h-full`}>
+    <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200"} border-2 rounded-lg shadow-2xl flex flex-col h-full min-h-0 overflow-hidden`}>
       <h2 className={`text-xl font-bold p-4 border-b ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>Chat</h2>
-      <div className="flex-grow p-4 overflow-y-auto space-y-3 scroll-smooth">
+      <div className="flex-1 min-h-0 p-4 overflow-y-auto overscroll-contain space-y-3 scroll-smooth">
         {messages.length > 0 ? (
           messages.map((msg, index) => (
             <div
               key={index}
-              className={`flex items-start gap-3 animate-fade-in ${
-                msg.userId === userId ? "justify-end flex-row-reverse" : ""
+              className={`w-full flex items-start gap-3 animate-fade-in ${
+                msg.userId === userId ? "flex-row-reverse" : "flex-row"
               }`}
             >
               <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${

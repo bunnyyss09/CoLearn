@@ -136,7 +136,7 @@ const Register = () => {
             return;
         }
 
-        if (isJoining && (roomId.trim() === "" || roomId.length !== 6)) {
+        if (isJoining && (roomId.trim() === "" || roomId.length !== 8)) {
             setError("Please enter a valid 6-digit Room ID to join.");
             return;
         }

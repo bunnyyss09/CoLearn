@@ -12,7 +12,10 @@ const rooms: any = {};
 function generateRoomId() {
   let id;
   do {
-    id = Math.floor(100000 + Math.random() * 900000).toString(); 
+    // Generate an 8-digit numeric room ID instead of 6 digits
+    // to significantly reduce the chance of collisions as more
+    // users and rooms are created.
+    id = Math.floor(10000000 + Math.random() * 90000000).toString(); 
   } while (rooms[id]);
   return id;
 }
@@ -232,6 +235,25 @@ async function process() {
               chatMessage: chatMessage,
             })
           );
+        });
+      }
+
+      // Handle AI assistant chat messages and broadcast to everyone in the room.
+      // The frontend sends already-constructed message objects (user + AI),
+      // and all connected users append them to their local AI chat state so
+      // everyone shares the same AI conversation.
+      if (data.type === "aiMessages" && Array.isArray(data.messages)) {
+        rooms[roomId].forEach((user: any) => {
+          // Do NOT echo back to the sender, since the sender already
+          // appends messages locally; echoing causes duplicates.
+          if (user.userId !== userId) {
+            user.ws.send(
+              JSON.stringify({
+                type: "aiMessages",
+                messages: data.messages,
+              })
+            );
+          }
         });
       }
     });

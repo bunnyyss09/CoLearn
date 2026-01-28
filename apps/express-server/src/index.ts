@@ -134,12 +134,12 @@ app.get("/auth/verify", authenticateToken, async (req: AuthRequest, res) => {
 });
 
 app.post('/ai-tutor', async (req, res) => {
-  const { userQuery, language, code, input, output, roomId } = req.body;
+  const { userQuery, language, code, input, output, roomId, userName } = req.body;
   if (!userQuery || !language || !code) {
       return res.status(400).json({ error: "Missing required fields: userQuery, language, or code." });
   }
   try {
-      const aiResponseText = await getAiTutorResponse({ userQuery, language, code, input, output });
+      const aiResponseText = await getAiTutorResponse({ userQuery, language, code, input, output, userName });
       
       // Save user message and AI response to database if roomId is provided
       if (roomId) {
@@ -148,6 +148,7 @@ app.post('/ai-tutor', async (req, res) => {
             roomId,
             sender: 'user',
             text: userQuery,
+            userName: userName,
           });
           await userMessage.save();
 
@@ -453,6 +454,7 @@ app.get("/room/:roomId/data", async (req, res) => {
       aiMessages: aiMessages.map(msg => ({
         sender: msg.sender,
         text: msg.text,
+        userName: msg.userName,
       })),
       chatMessages: chatMessages.map(msg => ({
         userId: msg.userId,

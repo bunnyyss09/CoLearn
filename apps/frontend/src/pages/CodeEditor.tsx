@@ -22,6 +22,9 @@ import remarkGfm from 'remark-gfm';
 type AiMessage = {
   sender: 'user' | 'ai';
   text: string;
+  // Optional display name for the user who asked the question.
+  // Present when sender === 'user'.
+  userName?: string;
 };
 
 // Type for an Input/Output session
@@ -124,7 +127,7 @@ const CodeEditor: React.FC = () => {
             setLanguage(data.language);
           }
           
-          // Always load AI messages from database (they're not synced via WebSocket)
+          // Always load AI messages from database (they're not synced via WebSocket on initial load)
           if (data.aiMessages && Array.isArray(data.aiMessages)) {
             setAiMessages(data.aiMessages);
           }
@@ -218,6 +221,14 @@ const CodeEditor: React.FC = () => {
           setIsLoading(data.isLoading);
           setIoSessions(data.ioSessions || [{ id: 1, input: "", output: [] }]); // fallback for older clients
           setActiveIoSessionId(data.activeIoSessionId || 1);
+        }
+
+        // Shared AI assistant messages: whenever any user in the room
+        // sends an AI query, the sender broadcasts both their question
+        // and the AI's reply via WebSocket so everyone sees the same
+        // AI conversation in real time.
+        if (data.type === "aiMessages" && Array.isArray(data.messages)) {
+          setAiMessages(prev => [...prev, ...data.messages]);
         }
       };
     }
@@ -346,7 +357,7 @@ const CodeEditor: React.FC = () => {
 
     if (activePanel === "ai") {
       return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
+        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full overflow-hidden transition-all duration-200`}>
           <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
             <FiBox /> AI Assistant
           </h2>
@@ -432,7 +443,7 @@ const CodeEditor: React.FC = () => {
           <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
             <FiMessageCircle /> Room Chat
           </h2>
-          <div className="flex-1">
+          <div className="flex-1 min-h-0 overflow-hidden">
             {chatId ? (
               <Chat
                 socket={socket}
@@ -504,11 +515,20 @@ const CodeEditor: React.FC = () => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading) return;
 
-    const userMessage: AiMessage = { sender: 'user', text: aiInput };
+    const userMessage: AiMessage = { sender: 'user', text: aiInput, userName: user.name };
     setAiMessages(prev => [...prev, userMessage]);
     const currentAiInput = aiInput;
     setAiInput("");
     setIsAiLoading(true);
+
+    // Broadcast the user's question to everyone in the room so the
+    // AI chat appears shared instead of per-user.
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: "aiMessages",
+        messages: [userMessage],
+      }));
+    }
 
     // Prepare the payload for the backend
     const effectiveRoomId = user.roomId || params.roomId;
@@ -518,7 +538,8 @@ const CodeEditor: React.FC = () => {
       code: code,
       input: activeSession.input,
       output: activeSession.output.join('\n'), // Send joined output
-      roomId: effectiveRoomId // Include roomId to save messages
+      roomId: effectiveRoomId, // Include roomId to save messages
+      userName: user.name,     // Send the user's name so the AI can address them
     };
 
     try {
@@ -533,7 +554,19 @@ const CodeEditor: React.FC = () => {
       }
 
       const { aiResponseText } = await res.json();
-      setAiMessages(prev => [...prev, { sender: 'ai', text: aiResponseText || "Sorry, I couldn't generate a response." }]);
+      const aiMessage: AiMessage = {
+        sender: 'ai',
+        text: aiResponseText || "Sorry, I couldn't generate a response.",
+      };
+      setAiMessages(prev => [...prev, aiMessage]);
+
+      // Broadcast the AI's response so everyone sees the same AI reply.
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: "aiMessages",
+          messages: [aiMessage],
+        }));
+      }
     } catch (error) {
       console.error("Error communicating with AI service:", error);
       setAiMessages(prev => [...prev, { sender: 'ai', text: "Error connecting to the AI assistant via the server." }]);
@@ -672,12 +705,13 @@ const CodeEditor: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen font-sans transition-colors duration-200 ${isDark ? "bg-black text-gray-300" : "bg-gradient-to-br from-gray-50 to-blue-50 text-gray-900"} flex h-screen overflow-hidden`}>      <Sidebar
-      showRooms
-      onOpenAccount={() => setIsAccountOpen(true)}
-      onOpenSettings={() => setIsSettingsOpen(true)}
-    />
-      <div className={`flex flex-col h-full flex-1 w-full gap-4 p-4 overflow-y-auto`}> 
+    <div className={`h-screen font-sans transition-colors duration-200 ${isDark ? "bg-black text-gray-300" : "bg-gradient-to-br from-gray-50 to-blue-50 text-gray-900"} flex h-screen overflow-hidden`}>
+      <Sidebar
+        showRooms
+        onOpenAccount={() => setIsAccountOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
+      <div className={`flex flex-col h-full flex-1 w-full gap-4 p-4 overflow-hidden`}> 
         <nav className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50/80 backdrop-blur-sm border-blue-200 shadow-lg"} border rounded-xl px-4 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between transition-all duration-200`}>
           <div className="flex items-center gap-3">
             <button
@@ -730,12 +764,12 @@ const CodeEditor: React.FC = () => {
               {isLoading && <AiOutlineLoading3Quarters className="animate-spin" />}
               <span>{currentButtonState}</span>
             </button>
-            <button
+            {/* <button
               onClick={handleLogout}
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-all duration-200 hover:scale-105 active:scale-95 shadow-md"
             >
               Logout
-            </button>
+            </button> */}
           </div>
         </nav>
 
