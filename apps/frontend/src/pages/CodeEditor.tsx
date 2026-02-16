@@ -41,7 +41,7 @@ const CodeEditor: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false); // Loading state for code submission
   const [currentButtonState, setCurrentButtonState] = useState("Run Code");
   const [user, setUser] = useRecoilState(userAtom);
-  const [, setAuth] = useRecoilState(authAtom);
+  const [auth, setAuth] = useRecoilState(authAtom);
   const navigate = useNavigate();
   const [isCopied, setIsCopied] = useState(false);
   const theme = useRecoilValue(themeAtom);
@@ -75,6 +75,10 @@ const CodeEditor: React.FC = () => {
   // Chat state
   const [chatId, setChatId] = useState<string>("");
 
+  // Learning room metadata (if this room has been upgraded to a module)
+  const [isLearningRoom, setIsLearningRoom] = useState<boolean>(false);
+  const [learningModuleId, setLearningModuleId] = useState<string | null>(null);
+
   // Sidebar panel state
   const [activePanel, setActivePanel] = useState<"ai" | "chat" | "info" | null>("ai");
 
@@ -104,12 +108,16 @@ const CodeEditor: React.FC = () => {
 
     const fetchRoomData = async () => {
       try {
-        // Get room info for chatId
+        // Get room info for chatId and learning metadata
         const roomResponse = await fetch(`http://${IP_ADDRESS}:3000/room/${effectiveRoomId}`);
         if (roomResponse.ok) {
           const roomData = await roomResponse.json();
           if (roomData.room && roomData.room.chatId) {
             setChatId(roomData.room.chatId);
+          }
+          if (roomData.room) {
+            setIsLearningRoom(!!roomData.room.isLearningRoom);
+            setLearningModuleId(roomData.room.moduleId || null);
           }
         }
 
@@ -144,10 +152,50 @@ const CodeEditor: React.FC = () => {
   useEffect(() => {
     const effectiveRoomId = user.roomId || params.roomId;
     
-    // If no socket and we have a roomId in URL, redirect to Register to join
-    if (!socket && effectiveRoomId) {
-      navigate("/" + effectiveRoomId);
-      return;
+    // If no socket but we have a roomId in URL, create a socket here.
+    // This prevents "Back to editor" from bouncing to the landing page.
+    if ((!socket || socket.readyState === WebSocket.CLOSED) && effectiveRoomId) {
+      const authUser = auth.user || (() => {
+        try {
+          const stored = localStorage.getItem("user");
+          return stored ? JSON.parse(stored) : null;
+        } catch {
+          return null;
+        }
+      })();
+
+      const userIdForWs = user.id || authUser?.id;
+      const userNameForWs = user.name || authUser?.name || "User";
+
+      if (userIdForWs) {
+        // Ensure user atom has the roomId so downstream code uses it consistently
+        if (!user.roomId && params.roomId) {
+          setUser((prev) => ({ ...prev, roomId: params.roomId as string }));
+        }
+
+        const ws = new WebSocket(
+          `ws://${IP_ADDRESS}:5000?roomId=${effectiveRoomId}&id=${userIdForWs}&name=${encodeURIComponent(
+            userNameForWs
+          )}`
+        );
+        
+        ws.onopen = () => {
+          // Once connected, request initial data
+          if (user.id) {
+            ws.send(JSON.stringify({ type: "requestToGetUsers", userId: user.id }));
+            ws.send(JSON.stringify({ type: "requestForAllData" }));
+          }
+        };
+        
+        ws.onclose = () => {
+          console.log("Connection closed");
+          setUser({ id: "", name: "", roomId: "" });
+          setSocket(null);
+        };
+        
+        setSocket(ws);
+        return;
+      }
     }
     
     // If we have a socket but user.roomId doesn't match params.roomId, we need to reconnect
@@ -157,13 +205,15 @@ const CodeEditor: React.FC = () => {
         socket.close();
       }
       setSocket(null);
-      navigate("/" + params.roomId);
       return;
     }
     
-    if (socket) {
-      socket.send(JSON.stringify({ type: "requestToGetUsers", userId: user.id }));
-      socket.send(JSON.stringify({ type: "requestForAllData" }));
+    // Only send messages if socket is OPEN (not CONNECTING or CLOSED)
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      if (user.id) {
+        socket.send(JSON.stringify({ type: "requestToGetUsers", userId: user.id }));
+        socket.send(JSON.stringify({ type: "requestForAllData" }));
+      }
       socket.onclose = () => {
         console.log("Connection closed");
         setUser({ id: "", name: "", roomId: "" });
@@ -176,7 +226,7 @@ const CodeEditor: React.FC = () => {
         socket.close();
       }
     };
-  }, [socket, params.roomId, user.roomId]);
+  }, [socket, params.roomId, user.roomId, user.id, auth.user, setSocket, setUser]);
 
 
   useEffect(() => {
@@ -229,10 +279,18 @@ const CodeEditor: React.FC = () => {
         // AI conversation in real time.
         if (data.type === "aiMessages" && Array.isArray(data.messages)) {
           setAiMessages(prev => [...prev, ...data.messages]);
+        // When a learning module is started by someone, move everyone to the
+        // learning room view for this room.
+        }
+        if (data.type === "enterLearningModule") {
+          const effectiveRoomId = user.roomId || params.roomId;
+          if (effectiveRoomId) {
+            navigate(`/learn/${effectiveRoomId}`);
+          }
         }
       };
     }
-  }, [code, language, currentButtonState, isLoading, socket, connectedUsers, ioSessions, activeIoSessionId]);
+  }, [code, language, currentButtonState, isLoading, socket, connectedUsers, ioSessions, activeIoSessionId, user.roomId, params.roomId, navigate]);
 
   useEffect(() => {
     aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -723,7 +781,7 @@ const CodeEditor: React.FC = () => {
             <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>CoLearn Live</span>
             <span className={`text-xs px-2 py-1 rounded-full ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}>Room {user.roomId || "..."}</span>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <button
               onClick={() => handlePanelToggle("ai")}
               className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
@@ -742,6 +800,19 @@ const CodeEditor: React.FC = () => {
             >
               <FiUsers /> Members & Room
             </button>
+            {/* Learning section: Learn button that opens the guided module */}
+            <div className="flex flex-col ml-2">
+              <button
+                onClick={() => {
+                  const effectiveRoomId = user.roomId || params.roomId;
+                  if (!effectiveRoomId) return;
+                  navigate(`/learn/${effectiveRoomId}/choose`);
+                }}
+                className={`mt-1 px-3 py-1.5 rounded-md text-xs font-medium ${isDark ? "bg-blue-700 text-white hover:bg-blue-600" : "bg-blue-600 text-white hover:bg-blue-700"} transition-all`}
+              >
+                Learn
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <select

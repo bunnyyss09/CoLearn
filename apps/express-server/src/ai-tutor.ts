@@ -2,6 +2,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 /**
  * Defines the structure for the data sent to the AI service.
+ * The extra optional fields are used to scope and constrain the AI
+ * when we are inside a structured learning checkpoint.
  */
 interface AiTutorData {
     userQuery: string;
@@ -30,7 +32,19 @@ Always address the student by their name when it is provided, and keep a friendl
  * @returns The structured string query for the AI.
  */
 function constructUserQuery(data: AiTutorData): string {
-    return `
+    const checkpointContext = data.checkpointTitle
+        ? `Current checkpoint:
+Title: ${data.checkpointTitle}
+Type: ${data.checkpointType || "unknown"}
+Description:
+${data.checkpointDescription || "No detailed description provided."}
+`
+        : "";
+
+    return `${baseSystemPrompt}
+
+${modeInstructions(data.aiMode)}
+
 Here is my current situation:
 Student name: ${data.userName || "Student"}
 Language: ${data.language}
@@ -46,6 +60,7 @@ Output from the code:
 \`\`\`
 ${data.output || "No output yet."}
 \`\`\`
+${checkpointContext}
 My question is: ${data.userQuery}
     `;
 }
