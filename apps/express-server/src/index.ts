@@ -171,6 +171,7 @@ app.post('/ai-tutor', async (req, res) => {
             roomId,
             sender: 'user',
             text: userQuery,
+            userName: userName,
           });
           await userMessage.save();
 
@@ -1032,6 +1033,7 @@ app.get("/room/:roomId/data", async (req, res) => {
       aiMessages: aiMessages.map(msg => ({
         sender: msg.sender,
         text: msg.text,
+        userName: msg.userName,
       })),
       chatMessages: chatMessages.map(msg => ({
         userId: msg.userId,

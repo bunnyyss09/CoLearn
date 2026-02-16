@@ -4,6 +4,11 @@ export interface IAiMessage extends Document {
   roomId: string;
   sender: 'user' | 'ai';
   text: string;
+  /**
+   * Optional display name of the user who asked the question.
+   * Present when sender === 'user'.
+   */
+  userName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +28,11 @@ const AiMessageSchema: Schema = new Schema(
     text: {
       type: String,
       required: true,
+    },
+    userName: {
+      type: String,
+      required: false,
+      trim: true,
     },
   },
   {
