@@ -27,6 +27,12 @@ export interface ICheckpoint {
   readOnlyCode?: boolean;
   // For predict-output checkpoints we keep a simple expected output string.
   expectedOutput?: string;
+  /**
+   * Test cases for this checkpoint. When present, the checkpoint can only be
+   * completed / advanced when all tests pass (code run with each input must
+   * produce the corresponding expectedOutput, after normalizing whitespace).
+   */
+  testCases?: Array<{ input: string; expectedOutput: string }>;
   // For some checkpoints we can require explicit peer review before progressing.
   requirePeerReview?: boolean;
   // Default AI mode for this checkpoint. The frontend can override
@@ -79,6 +85,12 @@ const CheckpointSchema = new Schema<ICheckpoint>(
     expectedOutput: {
       type: String,
     },
+    testCases: [
+      {
+        input: { type: String, default: '' },
+        expectedOutput: { type: String, required: true },
+      },
+    ],
     requirePeerReview: {
       type: Boolean,
       default: false,

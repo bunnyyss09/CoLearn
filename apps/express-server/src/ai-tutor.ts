@@ -5,35 +5,60 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
  * The extra optional fields are used to scope and constrain the AI
  * when we are inside a structured learning checkpoint.
  */
-interface AiTutorData {
+export interface AiTutorData {
     userQuery: string;
     language: string;
     code: string;
-    input: string;
-    output: string;
-    /**
-     * Optional display name of the user asking the question.
-     * Used so the AI can address the user personally.
-     */
+    input?: string;
+    output?: string;
     userName?: string;
+    checkpointType?: string;
+    checkpointTitle?: string;
+    checkpointDescription?: string;
+    aiMode?: string;
+    /** Learning module title for context */
+    moduleTitle?: string;
+    /** Learning module summary (e.g. checkpoint list or short overview) for context */
+    moduleSummary?: string;
 }
 
 // System prompt to guide the AI's behavior
-const systemPrompt = `You are an expert programming tutor. Your goal is to help a student learn by guiding them to the solution, not giving it away.
+const baseSystemPrompt = `You are an expert programming tutor. Your goal is to help students learn by guiding them to the solution, not giving it away.
 Analyze the user's code, their provided input, and the resulting output.
 Provide hints, ask leading questions, and explain concepts.
 Do not write the correct code for them unless they are completely stuck and explicitly ask for the solution.
 Keep your responses concise and encouraging.
-Always address the student by their name when it is provided, and keep a friendly, encouraging tone.`;
+When a user's name is provided, address them by name so they know you're replying to them. In a shared room, multiple learners may ask; always say who you're addressing (e.g. "Hi Sarah, ...") when multiple people are in the conversation.`;
+
+function modeInstructions(aiMode?: string): string {
+    switch (aiMode) {
+        case "socratic":
+            return "Mode: Socratic. Ask guiding questions; do not give direct answers. Help the student reason step by step.";
+        case "hint":
+            return "Mode: Hint. Give small, incremental hints. Do not reveal the full solution unless the student is truly stuck.";
+        case "review":
+            return "Mode: Review. Review the student's explanation or code for clarity and correctness. Give constructive feedback.";
+        case "summarizer":
+            return "Mode: Summarizer. Summarize what was learned and reinforce key concepts. Keep it brief.";
+        default:
+            return "Mode: General tutor. Balance hints with explanations; encourage the student to think.";
+    }
+}
 
 /**
  * Constructs the full prompt for the AI based on the user's code and question.
- * @param data The code, input, output, user's specific query, and optional name.
- * @returns The structured string query for the AI.
+ * Includes module summary, checkpoint context, and input/output for learning modules.
  */
 function constructUserQuery(data: AiTutorData): string {
+    const moduleContext = (data.moduleTitle || data.moduleSummary)
+        ? `
+Current learning module: ${data.moduleTitle || "N/A"}
+${data.moduleSummary ? `Module context:\n${data.moduleSummary}\n` : ""}`
+        : "";
+
     const checkpointContext = data.checkpointTitle
-        ? `Current checkpoint:
+        ? `
+Current checkpoint:
 Title: ${data.checkpointTitle}
 Type: ${data.checkpointType || "unknown"}
 Description:
@@ -44,8 +69,10 @@ ${data.checkpointDescription || "No detailed description provided."}
     return `${baseSystemPrompt}
 
 ${modeInstructions(data.aiMode)}
+${moduleContext}
+${checkpointContext}
 
-Here is my current situation:
+Here is the current situation:
 Student name: ${data.userName || "Student"}
 Language: ${data.language}
 Code:
@@ -54,15 +81,15 @@ ${data.code}
 \`\`\`
 Input given to the code:
 \`\`\`
-${data.input || "No input provided."}
+${data.input ?? "No input provided."}
 \`\`\`
 Output from the code:
 \`\`\`
-${data.output || "No output yet."}
+${data.output ?? "No output yet."}
 \`\`\`
-${checkpointContext}
+
 My question is: ${data.userQuery}
-    `;
+`;
 }
 
 /**

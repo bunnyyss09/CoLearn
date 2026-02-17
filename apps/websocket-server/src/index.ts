@@ -269,7 +269,7 @@ async function process() {
       // and all connected users append them to their local AI chat state so
       // everyone shares the same AI conversation.
       if (data.type === "aiMessages" && Array.isArray(data.messages)) {
-        rooms[roomId].forEach((user: any) => {
+        rooms[roomId].users.forEach((user: any) => {
           // Do NOT echo back to the sender, since the sender already
           // appends messages locally; echoing causes duplicates.
           if (user.userId !== userId) {
@@ -280,7 +280,8 @@ async function process() {
               })
             );
           }
-        }
+        });
+      }
       // ----- Learning-specific collaboration rules -----
       // Only one active typist at a time. Others can request control.
       if (data.type === "requestTypingControl") {

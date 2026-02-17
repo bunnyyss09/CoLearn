@@ -42,6 +42,7 @@ interface Checkpoint {
   starterCode?: string;
   readOnlyCode?: boolean;
   expectedOutput?: string;
+  testCases?: Array<{ input: string; expectedOutput: string }>;
   requirePeerReview?: boolean;
   aiMode: AiMode;
 }
@@ -71,6 +72,7 @@ interface LearningProgress {
 type AiMessage = {
   sender: "user" | "ai";
   text: string;
+  userName?: string;
 };
 
 type ActivePanel = "chat" | "ai" | "info";
@@ -105,6 +107,8 @@ const LearningRoom: React.FC = () => {
   const [explanation, setExplanation] = useState("");
   const [reflection, setReflection] = useState("");
   const [navError, setNavError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ allPassed: boolean; results?: Array<{ passed: boolean; expectedOutput: string; actualOutput: string }> } | null>(null);
+  const [isRunningTests, setIsRunningTests] = useState(false);
 
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
   const [aiInput, setAiInput] = useState("");
@@ -112,6 +116,10 @@ const LearningRoom: React.FC = () => {
   const aiChatEndRef = useRef<HTMLDivElement>(null);
 
   const [chatReady, setChatReady] = useState(false);
+  const [runInput, setRunInput] = useState("");
+  const [runOutput, setRunOutput] = useState<string[]>([]);
+  const [isRunning, setIsRunning] = useState(false);
+  const runSessionIdRef = useRef(1);
 
   const roomIdFromUrl = params.roomId || user.roomId;
 
@@ -179,7 +187,7 @@ const LearningRoom: React.FC = () => {
           });
         }
 
-        // Basic chatId fetch using existing /room endpoint
+        // Basic chatId fetch and shared AI messages for this room
         const roomRes = await fetch(
           `http://${IP_ADDRESS}:3000/room/${roomIdFromUrl}`
         );
@@ -190,6 +198,21 @@ const LearningRoom: React.FC = () => {
             setChatReady(true);
           }
         }
+        const dataRes = await fetch(
+          `http://${IP_ADDRESS}:3000/room/${roomIdFromUrl}/data`
+        );
+        if (dataRes.ok) {
+          const data = await dataRes.json();
+          if (data.aiMessages && Array.isArray(data.aiMessages)) {
+            setAiMessages(
+              data.aiMessages.map((m: { sender: string; text: string; userName?: string }) => ({
+                sender: m.sender as "user" | "ai",
+                text: m.text,
+                userName: m.userName,
+              }))
+            );
+          }
+        }
       } catch (e) {
         console.error("Failed to fetch learning room state", e);
       }
@@ -197,12 +220,13 @@ const LearningRoom: React.FC = () => {
     fetchLearningState();
   }, [auth.token, roomIdFromUrl]);
 
-  // Apply starter code when checkpoint changes
+  // Apply starter code when checkpoint changes; clear test result
   useEffect(() => {
     if (!currentCheckpoint) return;
     if (currentCheckpoint.starterCode) {
       setCode(currentCheckpoint.starterCode);
     }
+    setTestResult(null);
   }, [currentCheckpoint?.checkpointId]);
 
   // Ensure there is a WebSocket connection for this room and
@@ -238,6 +262,19 @@ const LearningRoom: React.FC = () => {
         setConnectedUsers(data.users || []);
       }
       if (data.type === "code") setCode(data.code);
+      if (data.type === "output" && data.sessionId === runSessionIdRef.current) {
+        setRunOutput((prev) => [...prev, data.message ?? data.result ?? ""]);
+      }
+      if (data.type === "aiMessages" && Array.isArray(data.messages)) {
+        setAiMessages((prev) => [
+          ...prev,
+          ...data.messages.map((m: { sender: string; text: string; userName?: string }) => ({
+            sender: m.sender as "user" | "ai",
+            text: m.text,
+            userName: m.userName,
+          })),
+        ]);
+      }
       // In learning room we never override language from WebSocket—it comes from the module (Python).
     };
 
@@ -282,28 +319,99 @@ const LearningRoom: React.FC = () => {
     });
   };
 
+  const handleRunCode = async () => {
+    if (!roomIdFromUrl) return;
+    setRunOutput([]);
+    setIsRunning(true);
+    try {
+      const res = await fetch(`http://${IP_ADDRESS}:3000/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          language,
+          roomId: roomIdFromUrl,
+          input: runInput,
+          sessionId: runSessionIdRef.current,
+        }),
+      });
+      if (!res.ok) {
+        setRunOutput(["Failed to run code."]);
+      }
+    } catch {
+      setRunOutput(["Failed to connect to run server."]);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const handleRunTests = async () => {
+    if (!roomIdFromUrl || !auth.token) return;
+    setIsRunningTests(true);
+    setTestResult(null);
+    setNavError(null);
+    try {
+      const res = await fetch(
+        `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/run-tests`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.token}`,
+          },
+          body: JSON.stringify({ code }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      setTestResult({
+        allPassed: !!data.allPassed,
+        results: data.results,
+      });
+      if (!res.ok) {
+        setNavError(data.error || "Failed to run tests.");
+      }
+    } catch (e) {
+      console.error("Run tests failed", e);
+      setNavError("Failed to run tests.");
+    } finally {
+      setIsRunningTests(false);
+    }
+  };
+
   const handleAiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading || !currentCheckpoint) return;
 
-    const msg: AiMessage = { sender: "user", text: aiInput };
-    setAiMessages((prev) => [...prev, msg]);
+    const userName = user.name || "Learner";
+    const userMsg: AiMessage = { sender: "user", text: aiInput, userName };
+    setAiMessages((prev) => [...prev, userMsg]);
     const currentInput = aiInput;
     setAiInput("");
     setIsAiLoading(true);
+
+    const moduleSummary = module
+      ? `${module.title}. Checkpoints: ${module.checkpoints.map((cp) => cp.title).join("; ")}. Current: ${currentCheckpoint.title} - ${currentCheckpoint.summary}`
+      : "";
 
     const submission = {
       userQuery: currentInput,
       language,
       code,
-      input: "",
-      output: "",
+      input: runInput,
+      output: runOutput.join("\n"),
       roomId: roomIdFromUrl,
+      userName,
       checkpointType: currentCheckpoint.type,
       checkpointTitle: currentCheckpoint.title,
       checkpointDescription: currentCheckpoint.description,
       aiMode: currentCheckpoint.aiMode,
+      moduleTitle: module?.title,
+      moduleSummary,
     };
+
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "aiMessages", messages: [userMsg] }));
+    }
 
     try {
       const res = await fetch(`http://${IP_ADDRESS}:3000/ai-tutor`, {
@@ -315,19 +423,21 @@ const LearningRoom: React.FC = () => {
         throw new Error(`Server responded with status ${res.status}`);
       }
       const { aiResponseText } = await res.json();
-      setAiMessages((prev) => [
-        ...prev,
-        { sender: "ai", text: aiResponseText || "No response." },
-      ]);
+      const aiMsg: AiMessage = { sender: "ai", text: aiResponseText || "No response." };
+      setAiMessages((prev) => [...prev, aiMsg]);
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "aiMessages", messages: [aiMsg] }));
+      }
     } catch (err) {
       console.error("AI tutor error", err);
-      setAiMessages((prev) => [
-        ...prev,
-        {
-          sender: "ai",
-          text: "Error connecting to the AI guide. Please try again.",
-        },
-      ]);
+      const errMsg: AiMessage = {
+        sender: "ai",
+        text: "Error connecting to the AI guide. Please try again.",
+      };
+      setAiMessages((prev) => [...prev, errMsg]);
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "aiMessages", messages: [errMsg] }));
+      }
     } finally {
       setIsAiLoading(false);
     }
@@ -347,22 +457,32 @@ const LearningRoom: React.FC = () => {
         {
           method: "POST",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${auth.token}`,
           },
+          body: JSON.stringify({ code }),
         }
       );
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.room?.currentCheckpointIndex != null) {
         const nextIndex = data.room.currentCheckpointIndex;
         setCurrentCheckpointIndex(nextIndex);
-        // If the backend returns the same index, surface it so it doesn't feel broken.
         if (nextIndex === currentCheckpointIndex && module) {
           setNavError(
             `Already at the last checkpoint (${currentCheckpointIndex + 1}/${module.checkpoints.length}).`
           );
         }
       } else if (!res.ok && data?.error) {
-        setNavError(data.error || "Cannot advance checkpoint.");
+        if (data.results && !data.allPassed) {
+          const failed = data.results.filter((r: { passed: boolean }) => !r.passed);
+          setNavError(
+            `${data.error} Failed: ${failed.map((r: { input: string; actualOutput: string; expectedOutput: string }) =>
+              `expected "${r.expectedOutput}" got "${r.actualOutput}"`
+            ).join("; ")}`
+          );
+        } else {
+          setNavError(data.error || "Cannot advance checkpoint.");
+        }
         console.warn("Cannot advance checkpoint:", data);
       } else if (!res.ok) {
         setNavError("Cannot advance checkpoint.");
@@ -380,18 +500,31 @@ const LearningRoom: React.FC = () => {
   const handleCompleteCheckpoint = async () => {
     if (!roomIdFromUrl || !currentCheckpoint || !auth.token) return;
     setIsCompletingCheckpoint(true);
+    setNavError(null);
     try {
       const res = await fetch(
         `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/checkpoints/${currentCheckpoint.checkpointId}/complete`,
         {
           method: "POST",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${auth.token}`,
           },
+          body: JSON.stringify({ code }),
         }
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (data.results && !data.allPassed) {
+          const failed = data.results.filter((r: { passed: boolean }) => !r.passed);
+          setNavError(
+            `${data.error} Failed: ${failed.map((r: { input: string; actualOutput: string; expectedOutput: string }) =>
+              `expected "${r.expectedOutput}" got "${r.actualOutput}"`
+            ).join("; ")}`
+          );
+        } else {
+          setNavError(data.error || "Cannot complete checkpoint.");
+        }
         console.warn("Failed to complete checkpoint:", data);
         return;
       }
@@ -404,6 +537,7 @@ const LearningRoom: React.FC = () => {
       }
     } catch (e) {
       console.error("Failed to complete checkpoint", e);
+      setNavError("Failed to complete checkpoint.");
     } finally {
       setIsCompletingCheckpoint(false);
     }
@@ -599,6 +733,42 @@ const LearningRoom: React.FC = () => {
           />
         </div>
 
+        <div
+          className={`rounded-lg border p-3 flex flex-col gap-2 ${
+            isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
+          }`}
+        >
+          <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+            Run code (output is used as context for the AI guide)
+          </p>
+          <textarea
+            value={runInput}
+            onChange={(e) => setRunInput(e.target.value)}
+            placeholder="Stdin (optional)"
+            className={`w-full rounded-md border p-2 text-sm font-mono ${
+              isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-300 text-gray-900"
+            }`}
+            rows={1}
+          />
+          <button
+            type="button"
+            onClick={handleRunCode}
+            disabled={isRunning}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+              isDark ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
+            } disabled:opacity-50`}
+          >
+            {isRunning ? "Running…" : "Run"}
+          </button>
+          {runOutput.length > 0 && (
+            <pre className={`text-xs p-2 rounded border overflow-x-auto ${
+              isDark ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-gray-50 border-gray-200 text-gray-800"
+            }`}>
+              {runOutput.join("\n")}
+            </pre>
+          )}
+        </div>
+
         {isExplainCheckpoint && (
           <div
             className={`rounded-lg border p-3 flex flex-col gap-2 ${
@@ -653,6 +823,40 @@ const LearningRoom: React.FC = () => {
               }`}
               rows={3}
             />
+          </div>
+        )}
+
+        {currentCheckpoint?.testCases && currentCheckpoint.testCases.length > 0 && (
+          <div className={`rounded-lg border p-3 flex flex-col gap-2 ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"}`}>
+            <p className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+              This checkpoint has test cases. Run tests and pass all before completing or moving to Next.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRunTests}
+                disabled={isRunningTests}
+                className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {isRunningTests && <AiOutlineLoading3Quarters className="animate-spin" />}
+                Run tests
+              </button>
+              {testResult !== null && (
+                <span className={testResult.allPassed ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                  {testResult.allPassed ? "All tests passed" : "Some tests failed"}
+                </span>
+              )}
+            </div>
+            {testResult?.results && testResult.results.length > 0 && (
+              <ul className={`text-xs space-y-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                {testResult.results.map((r, i) => (
+                  <li key={i}>
+                    Test {i + 1}: {r.passed ? "✓" : "✗"}
+                    {!r.passed && ` expected "${r.expectedOutput}" got "${r.actualOutput}"`}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
@@ -811,10 +1015,15 @@ const LearningRoom: React.FC = () => {
           {aiMessages.map((msg, idx) => (
             <div
               key={idx}
-              className={`flex ${
-                msg.sender === "user" ? "justify-end" : "justify-start"
+              className={`flex flex-col ${
+                msg.sender === "user" ? "items-end" : "items-start"
               }`}
             >
+              {msg.sender === "user" && msg.userName && (
+                <span className={`text-xs mb-0.5 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                  {msg.userName}
+                </span>
+              )}
               <div
                 className={`max-w-xs md:max-w-sm rounded-2xl px-3 py-2 text-sm ${
                   msg.sender === "user"
