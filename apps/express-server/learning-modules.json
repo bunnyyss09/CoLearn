@@ -1,0 +1,50 @@
+{
+  "modules": [
+    {
+      "moduleId": "python-loops-advanced",
+      "title": "Python Loops – Patterns & Edge Cases",
+      "language": "python",
+      "difficulty": "intermediate",
+      "estimatedTimeMinutes": 35,
+      "checkpoints": [
+        {
+          "checkpointId": "pla-1-pattern-print",
+          "title": "Print a right triangle of stars",
+          "type": "write-code",
+          "summary": "Use nested loops to print a triangle pattern.",
+          "description": "Write a program that prints a right triangle of `*` characters with height **3**.\n\nThe expected output is:\n```text\n*\n**\n***\n```",
+          "starterCode": "# Python\n# TODO: print the triangle pattern described in the checkpoint.\n",
+          "readOnlyCode": false,
+          "testCases": [
+            {
+              "input": "",
+              "expectedOutput": "*\n**\n***"
+            }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pla-2-sum-list",
+          "title": "Sum a list safely",
+          "type": "fix-code",
+          "summary": "Fix a loop that crashes on empty lists.",
+          "description": "The code below should compute the sum of a list of numbers but crashes on empty lists. Fix it so that it returns 0 for an empty list.\n\nUse a `for` loop; do not call `sum()` directly.",
+          "starterCode": "# Python\nnums = [1, 2, 3]\nresult = 0\nfor i in range(len(nums) + 1):\n    result += nums[i]\nprint(result)\n",
+          "readOnlyCode": false,
+          "testCases": [
+            {
+              "input": "",
+              "expectedOutput": "6"
+            },
+            {
+              "input": "",
+              "expectedOutput": "0"
+            }
+          ],
+          "aiMode": "socratic"
+        }
+      ]
+    }
+  ]
+}
+

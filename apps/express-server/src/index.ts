@@ -17,6 +17,7 @@ import AiMessage from "./models/AiMessage";
 import { v4 as uuidv4 } from "uuid";
 import { generateToken, authenticateToken, AuthRequest } from "./utils/auth";
 import learningRouter, { ensureDefaultLearningModules } from "./routes/learning";
+import { seedLearningModulesFromJson } from "./utils/seedLearningModulesFromJson";
 
 const app = express();
 app.use(express.json());
@@ -227,6 +228,9 @@ app.post("/submit", async (req, res) => {
     res.status(500).send("Failed to store submission");
   }
 });
+
+// Mount learning routes (modules, learning rooms, checkpoints)
+app.use("/learning", learningRouter);
 
 // Chat endpoints
 app.post("/chat/send", async (req, res) => {
@@ -556,6 +560,8 @@ async function main() {
 
     // Seed initial learning modules once database is available.
     await ensureDefaultLearningModules();
+    // Optionally load / upsert additional modules from JSON definition.
+    await seedLearningModulesFromJson();
 
     console.log("Redis Client Connected");
   } catch (error) {

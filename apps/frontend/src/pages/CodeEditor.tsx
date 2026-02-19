@@ -82,6 +82,11 @@ const CodeEditor: React.FC = () => {
   // Sidebar panel state
   const [activePanel, setActivePanel] = useState<"ai" | "chat" | "info" | null>("ai");
 
+  // Sidebar closed by default on non-landing pages
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
   // Handle Ctrl+Enter or Ctrl+' to run code
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

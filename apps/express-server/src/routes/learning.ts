@@ -25,7 +25,8 @@ import Notes from "../models/Notes";
 import User from "../models/User";
 import { authenticateToken, AuthRequest } from "../utils/auth";
 import { runCodeWithInput, normalizeOutput } from "../utils/runCode";
-
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { normalizeForComparison } = require("../utils/outputNormalization");
 const router = Router();
 
 export async function ensureDefaultLearningModules(): Promise<void> {
@@ -281,14 +282,14 @@ router.post("/room/:roomId/run-tests", authenticateToken, async (req: AuthReques
     const results: Array<{ input: string; expectedOutput: string; actualOutput: string; passed: boolean }> = [];
     for (const { input, expectedOutput } of testCases) {
       const actualRaw = await runCodeWithInput(code, language, input ?? "");
-      const actualOutput = normalizeOutput(actualRaw);
-      const expectedNormalized = normalizeOutput(expectedOutput);
+      const actualOutput = normalizeForComparison(actualRaw);
+      const expectedNormalized = normalizeForComparison(expectedOutput);
       results.push({
         input: input ?? "",
         expectedOutput: expectedNormalized,
         actualOutput,
         passed: actualOutput === expectedNormalized,
-      });
+      }); 
     }
     const allPassed = results.every((r) => r.passed);
     res.status(200).json({ allPassed, results });
@@ -343,8 +344,8 @@ function runTestsForCheckpoint(
     const results: Array<{ input: string; expectedOutput: string; actualOutput: string; passed: boolean }> = [];
     for (const { input, expectedOutput } of testCases) {
       const actualRaw = await runCodeWithInput(code, language, input ?? "");
-      const actualOutput = normalizeOutput(actualRaw);
-      const expectedNormalized = normalizeOutput(expectedOutput);
+      const actualOutput = normalizeForComparison(actualRaw);
+      const expectedNormalized = normalizeForComparison(expectedOutput);
       results.push({
         input: input ?? "",
         expectedOutput: expectedNormalized,

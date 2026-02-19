@@ -2,7 +2,8 @@ import { exec } from "child_process";
 import fs from "fs/promises";
 import path from "path";
 import { promisify } from "util";
-
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { normalizeForComparison } = require("./outputNormalization");
 const execAsync = promisify(exec);
 
 const TIMEOUT_MS = 10000;
@@ -49,7 +50,7 @@ export async function runCodeWithInput(
     const { stdout, stderr } = await execAsync(dockerCommand, {
       timeout: TIMEOUT_MS,
     });
-    const result = (stdout || "").trim() + (stderr ? "\n" + stderr.trim() : "");
+    const result = (stdout || "") + (stderr ? "\n" + stderr : "");
     return result;
   } catch (err: any) {
     const message = err.stderr || err.stdout || err.message || String(err);
@@ -61,12 +62,5 @@ export async function runCodeWithInput(
   }
 }
 
-/** Normalize output for comparison: trim and collapse consecutive newlines/spaces. */
-export function normalizeOutput(output: string): string {
-  return output
-    .trim()
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/\n{2,}/g, "\n")
-    .replace(/[ \t]+/g, " ");
-}
+// Backwards‑compatible export name for existing imports.
+export const normalizeOutput = normalizeForComparison;

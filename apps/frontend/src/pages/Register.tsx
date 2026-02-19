@@ -10,6 +10,7 @@ import Sidebar from '../components/Sidebar';
 import AccountModal from '../components/AccountModal';
 import SettingsModal from '../components/SettingsModal';
 import { themeAtom } from '../atoms/themeAtom';
+import { sidebarOpenAtom } from '../atoms/sidebarAtom';
 
 // --- Helper Components & Icons ---
 
@@ -38,7 +39,13 @@ const Register = () => {
     const [showAuthModal, setShowAuthModal] = useState(false);
     const navigate = useNavigate();
     const theme = useRecoilValue(themeAtom);
+    const [, setIsSidebarOpen] = useRecoilState(sidebarOpenAtom);
     const isDark = theme === 'dark';
+
+    // Sidebar always open on landing page
+    useEffect(() => {
+        setIsSidebarOpen(true);
+    }, []);
 
     useEffect(() => {
         document.title = "CoLearn - Collaborative Coding";

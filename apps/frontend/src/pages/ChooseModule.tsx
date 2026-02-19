@@ -39,6 +39,11 @@ const ChooseModule: React.FC = () => {
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // Sidebar closed by default on non-landing pages
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, []);
+
   useEffect(() => {
     const fetchModules = async () => {
       if (!auth.token) return;

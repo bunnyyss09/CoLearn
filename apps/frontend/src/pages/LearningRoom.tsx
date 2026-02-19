@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import MonacoEditor from "@monaco-editor/react";
+// @ts-ignore - library has no bundled types
+import SplitPane from "react-split-pane";
 import { useParams, useNavigate } from "react-router-dom";
 import { useRecoilState, useRecoilValue } from "recoil";
 import { userAtom } from "../atoms/userAtom";
@@ -15,6 +17,9 @@ import Chat from "../components/Chat";
 import { IP_ADDRESS } from "../Globle";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { normalizeForDisplay } from "../utils/outputNormalization.ts";
+// Local alias to keep SplitPane typing simple in this file.
+const AnySplitPane: any = SplitPane;
 import {
   FiChevronsLeft,
   FiChevronsRight,
@@ -77,12 +82,24 @@ type AiMessage = {
 
 type ActivePanel = "chat" | "ai" | "info";
 
+const loadSize = (key: string, fallback: number) => {
+  if (typeof window === "undefined") return fallback;
+  const raw = window.localStorage.getItem(key);
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const saveSize = (key: string, value: number) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, String(value));
+};
+
 const LearningRoom: React.FC = () => {
   const params = useParams();
   // NOTE: navigate is intentionally not used yet; we keep it around
   // for future flows where learners might jump back to the main room.
   const navigate = useNavigate();
-  const [user, setUser] = useRecoilState(userAtom);
+  const [user] = useRecoilState(userAtom);
   const [auth] = useRecoilState(authAtom);
   const [socket, setSocket] = useRecoilState<WebSocket | null>(socketAtom);
   const [connectedUsers, setConnectedUsers] =
@@ -109,6 +126,7 @@ const LearningRoom: React.FC = () => {
   const [navError, setNavError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ allPassed: boolean; results?: Array<{ passed: boolean; expectedOutput: string; actualOutput: string }> } | null>(null);
   const [isRunningTests, setIsRunningTests] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
   const [aiInput, setAiInput] = useState("");
@@ -120,18 +138,23 @@ const LearningRoom: React.FC = () => {
   const [runOutput, setRunOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const runSessionIdRef = useRef(1);
+  const [ioPanelCollapsed, setIoPanelCollapsed] = useState(false);
+  const [activeIOTab, setActiveIOTab] = useState<string>("custom");
+  const [testCaseOutputs, setTestCaseOutputs] = useState<Record<number, string[]>>({});
 
   const roomIdFromUrl = params.roomId || user.roomId;
+
+  // Sidebar closed by default on LearningRoom (non-landing pages)
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, []);
 
   const currentCheckpoint: Checkpoint | undefined =
     module?.checkpoints[currentCheckpointIndex];
 
   const currentAiMode: AiMode = currentCheckpoint?.aiMode;
 
-  const currentProgressCheckpoint =
-    progress?.checkpoints.find(
-      (cp) => cp.checkpointId === currentCheckpoint?.checkpointId
-    ) || null;
+  // Per-checkpoint user progress is currently not surfaced in the UI.
 
   const canEditCode = !!currentCheckpoint && !currentCheckpoint.readOnlyCode;
 
@@ -220,13 +243,18 @@ const LearningRoom: React.FC = () => {
     fetchLearningState();
   }, [auth.token, roomIdFromUrl]);
 
-  // Apply starter code when checkpoint changes; clear test result
+  // Apply starter code when checkpoint changes; clear run/test state
   useEffect(() => {
     if (!currentCheckpoint) return;
     if (currentCheckpoint.starterCode) {
       setCode(currentCheckpoint.starterCode);
     }
     setTestResult(null);
+     setRunInput("");
+     setRunOutput([]);
+     setTestCaseOutputs({});
+     setActiveIOTab("custom");
+     setNavError(null);
   }, [currentCheckpoint?.checkpointId]);
 
   // Ensure there is a WebSocket connection for this room and
@@ -262,8 +290,19 @@ const LearningRoom: React.FC = () => {
         setConnectedUsers(data.users || []);
       }
       if (data.type === "code") setCode(data.code);
-      if (data.type === "output" && data.sessionId === runSessionIdRef.current) {
-        setRunOutput((prev) => [...prev, data.message ?? data.result ?? ""]);
+      if (data.type === "output") {
+        if (data.sessionId === runSessionIdRef.current) {
+          setRunOutput((prev) => [...prev, data.message ?? data.result ?? ""]);
+        } else if (typeof data.sessionId === "string" && data.sessionId.startsWith("test-")) {
+          const match = data.sessionId.match(/test-(\d+)-/);
+          if (match) {
+            const testIndex = parseInt(match[1], 10);
+            setTestCaseOutputs((prev) => ({
+              ...prev,
+              [testIndex]: [...(prev[testIndex] || []), data.message ?? data.result ?? ""],
+            }));
+          }
+        }
       }
       if (data.type === "aiMessages" && Array.isArray(data.messages)) {
         setAiMessages((prev) => [
@@ -319,31 +358,6 @@ const LearningRoom: React.FC = () => {
     });
   };
 
-  const handleRunCode = async () => {
-    if (!roomIdFromUrl) return;
-    setRunOutput([]);
-    setIsRunning(true);
-    try {
-      const res = await fetch(`http://${IP_ADDRESS}:3000/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code,
-          language,
-          roomId: roomIdFromUrl,
-          input: runInput,
-          sessionId: runSessionIdRef.current,
-        }),
-      });
-      if (!res.ok) {
-        setRunOutput(["Failed to run code."]);
-      }
-    } catch {
-      setRunOutput(["Failed to connect to run server."]);
-    } finally {
-      setIsRunning(false);
-    }
-  };
 
   const handleRunTests = async () => {
     if (!roomIdFromUrl || !auth.token) return;
@@ -367,16 +381,36 @@ const LearningRoom: React.FC = () => {
         allPassed: !!data.allPassed,
         results: data.results,
       });
-      if (!res.ok) {
-        setNavError(data.error || "Failed to run tests.");
+      if (!res.ok || !data.allPassed) {
+        setNavError(data.error || "Some tests failed.");
+        setToast({
+          type: "error",
+          message: "Some tests failed. Fix the code or ask the AI guide for help.",
+        });
+      } else {
+        setToast({
+          type: "success",
+          message: "All tests passed. You can safely move to the next checkpoint.",
+        });
       }
     } catch (e) {
       console.error("Run tests failed", e);
       setNavError("Failed to run tests.");
+      setToast({
+        type: "error",
+        message: "Failed to run tests. Please try again.",
+      });
     } finally {
       setIsRunningTests(false);
     }
   };
+
+  // Auto-hide toast after a short delay
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const handleAiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -495,53 +529,7 @@ const LearningRoom: React.FC = () => {
     }
   };
 
-  const [isCompletingCheckpoint, setIsCompletingCheckpoint] = useState(false);
-
-  const handleCompleteCheckpoint = async () => {
-    if (!roomIdFromUrl || !currentCheckpoint || !auth.token) return;
-    setIsCompletingCheckpoint(true);
-    setNavError(null);
-    try {
-      const res = await fetch(
-        `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/checkpoints/${currentCheckpoint.checkpointId}/complete`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${auth.token}`,
-          },
-          body: JSON.stringify({ code }),
-        }
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (data.results && !data.allPassed) {
-          const failed = data.results.filter((r: { passed: boolean }) => !r.passed);
-          setNavError(
-            `${data.error} Failed: ${failed.map((r: { input: string; actualOutput: string; expectedOutput: string }) =>
-              `expected "${r.expectedOutput}" got "${r.actualOutput}"`
-            ).join("; ")}`
-          );
-        } else {
-          setNavError(data.error || "Cannot complete checkpoint.");
-        }
-        console.warn("Failed to complete checkpoint:", data);
-        return;
-      }
-      if (data.progress) {
-        setProgress({
-          currentCheckpointIndex:
-            data.progress.currentCheckpointIndex ?? (progress?.currentCheckpointIndex || 0),
-          checkpoints: data.progress.checkpoints || [],
-        });
-      }
-    } catch (e) {
-      console.error("Failed to complete checkpoint", e);
-      setNavError("Failed to complete checkpoint.");
-    } finally {
-      setIsCompletingCheckpoint(false);
-    }
-  };
+  // Explicit completion is no longer used; checkpoints advance strictly via tests + Next.
 
   const handlePreviousCheckpoint = async () => {
     if (!roomIdFromUrl) return;
@@ -670,8 +658,8 @@ const LearningRoom: React.FC = () => {
         const isNextDisabled = isAdvancing;
         const isPrevDisabled = isAdvancing || currentCheckpointIndex === 0;
 
-    return (
-      <div className="flex-1 flex flex-col gap-3">
+    const topPanel = (
+      <div className="flex flex-col gap-3">
         <div
           className={`rounded-lg border p-4 ${
             isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
@@ -695,7 +683,7 @@ const LearningRoom: React.FC = () => {
             }`}
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {currentCheckpoint.description}
+              {normalizeForDisplay(currentCheckpoint.description)}
             </ReactMarkdown>
           </div>
         </div>
@@ -732,42 +720,312 @@ const LearningRoom: React.FC = () => {
             }}
           />
         </div>
+      </div>
+    );
 
+    const renderOutputBlock = (label: string, text: string) => (
+      <div>
         <div
-          className={`rounded-lg border p-3 flex flex-col gap-2 ${
+          className={`text-[11px] font-semibold mb-1 ${
+            isDark ? "text-gray-400" : "text-gray-500"
+          }`}
+        >
+          {label}
+        </div>
+        <pre
+          className={`text-xs rounded border px-2 py-1 font-mono overflow-x-auto ${
+            isDark
+              ? "bg-gray-900 border-gray-700 text-gray-100"
+              : "bg-gray-50 border-gray-300 text-gray-900"
+          }`}
+          style={{ whiteSpace: "pre-wrap" }}
+        >
+          {normalizeForDisplay(text)}
+        </pre>
+      </div>
+    );
+
+    const renderLineDiff = (expectedRaw: string, actualRaw: string) => {
+      const expected = normalizeForDisplay(expectedRaw).split("\n");
+      const actual = normalizeForDisplay(actualRaw).split("\n");
+      const maxLen = Math.max(expected.length, actual.length);
+      return (
+        <div className="mt-2 border rounded text-[11px] overflow-auto">
+          <div
+            className={`px-2 py-1 font-semibold ${
+              isDark ? "bg-gray-900 text-gray-200" : "bg-gray-100 text-gray-800"
+            }`}
+          >
+            Line-by-line diff
+          </div>
+          <div className="max-h-40 overflow-auto">
+            {Array.from({ length: maxLen }).map((_, i) => {
+              const e = expected[i] ?? "";
+              const a = actual[i] ?? "";
+              const same = e === a;
+              return (
+                <div
+                  key={i}
+                  className={`grid grid-cols-2 gap-1 px-2 py-0.5 border-t ${
+                    same
+                      ? isDark
+                        ? "border-gray-800"
+                        : "border-gray-200"
+                      : isDark
+                      ? "bg-red-900/30 border-red-900"
+                      : "bg-red-50 border-red-200"
+                  }`}
+                >
+                  <div className="font-mono">
+                    <span className="mr-1 text-[10px] opacity-60">{i + 1}E:</span>
+                    {e === "" ? "∅" : e}
+                  </div>
+                  <div className="font-mono">
+                    <span className="mr-1 text-[10px] opacity-60">{i + 1}A:</span>
+                    {a === "" ? "∅" : a}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
+    const handleRunCodeForTab = async (tabId: string) => {
+      if (!roomIdFromUrl) return;
+      if (tabId === "custom") {
+        setRunOutput([]);
+        setIsRunning(true);
+        try {
+          const res = await fetch(`http://${IP_ADDRESS}:3000/submit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code,
+              language,
+              roomId: roomIdFromUrl,
+              input: runInput,
+              sessionId: runSessionIdRef.current,
+            }),
+          });
+          if (!res.ok) {
+            setRunOutput(["Failed to run code."]);
+          }
+        } catch {
+          setRunOutput(["Failed to connect to run server."]);
+        } finally {
+          setIsRunning(false);
+        }
+      } else if (tabId.startsWith("test-")) {
+        const testIndex = parseInt(tabId.replace("test-", ""), 10);
+        const testCase = currentCheckpoint?.testCases?.[testIndex];
+        if (!testCase) return;
+        
+        setTestCaseOutputs((prev) => ({ ...prev, [testIndex]: [] }));
+        setIsRunning(true);
+        try {
+          const res = await fetch(`http://${IP_ADDRESS}:3000/submit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code,
+              language,
+              roomId: roomIdFromUrl,
+              input: testCase.input || "",
+              sessionId: `test-${testIndex}-${runSessionIdRef.current}`,
+            }),
+          });
+          if (!res.ok) {
+            setTestCaseOutputs((prev) => ({ ...prev, [testIndex]: ["Failed to run code."] }));
+          }
+        } catch {
+          setTestCaseOutputs((prev) => ({ ...prev, [testIndex]: ["Failed to connect to run server."] }));
+        } finally {
+          setIsRunning(false);
+        }
+      }
+    };
+
+    const bottomPanel = (
+      <div className="flex flex-col gap-3">
+        <details
+          open={!ioPanelCollapsed}
+          className={`rounded-lg border ${
             isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
           }`}
         >
-          <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-            Run code (output is used as context for the AI guide)
-          </p>
-          <textarea
-            value={runInput}
-            onChange={(e) => setRunInput(e.target.value)}
-            placeholder="Stdin (optional)"
-            className={`w-full rounded-md border p-2 text-sm font-mono ${
-              isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-300 text-gray-900"
+          <summary
+            className={`px-3 py-2 cursor-pointer select-none flex items-center justify-between ${
+              isDark ? "hover:bg-gray-800" : "hover:bg-gray-50"
             }`}
-            rows={1}
-          />
-          <button
-            type="button"
-            onClick={handleRunCode}
-            disabled={isRunning}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-              isDark ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
-            } disabled:opacity-50`}
+            onClick={(e) => {
+              e.preventDefault();
+              setIoPanelCollapsed(!ioPanelCollapsed);
+            }}
           >
-            {isRunning ? "Running…" : "Run"}
-          </button>
-          {runOutput.length > 0 && (
-            <pre className={`text-xs p-2 rounded border overflow-x-auto ${
-              isDark ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-gray-50 border-gray-200 text-gray-800"
-            }`}>
-              {runOutput.join("\n")}
-            </pre>
+            <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              Input / Output
+            </p>
+            <span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+              {ioPanelCollapsed ? "▼" : "▲"}
+            </span>
+          </summary>
+          {!ioPanelCollapsed && (
+            <div className="p-3 flex flex-col gap-3">
+              {/* Tabs */}
+              <div className="flex gap-2 border-b overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setActiveIOTab("custom")}
+                  className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeIOTab === "custom"
+                      ? isDark
+                        ? "border-blue-500 text-blue-400"
+                        : "border-blue-600 text-blue-600"
+                      : isDark
+                      ? "border-transparent text-gray-400 hover:text-gray-300"
+                      : "border-transparent text-gray-600 hover:text-gray-800"
+                  }`}
+                >
+                  Custom I/O
+                </button>
+                {currentCheckpoint?.testCases?.map((_, index) => (
+                  <button
+                    key={`test-${index}`}
+                    type="button"
+                    onClick={() => setActiveIOTab(`test-${index}`)}
+                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                      activeIOTab === `test-${index}`
+                        ? isDark
+                          ? "border-blue-500 text-blue-400"
+                          : "border-blue-600 text-blue-600"
+                        : isDark
+                        ? "border-transparent text-gray-400 hover:text-gray-300"
+                        : "border-transparent text-gray-600 hover:text-gray-800"
+                    }`}
+                  >
+                    Test {index + 1}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Content */}
+              {activeIOTab === "custom" && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                      Input
+                    </label>
+                    <textarea
+                      value={runInput}
+                      onChange={(e) => setRunInput(e.target.value)}
+                      placeholder="Enter custom input..."
+                      className={`w-full rounded-md border p-2 text-sm font-mono resize-none ${
+                        isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-300 text-gray-900"
+                      }`}
+                      rows={3}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRunCodeForTab("custom")}
+                    disabled={isRunning}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                      isDark ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
+                    } disabled:opacity-50`}
+                  >
+                    {isRunning ? "Running…" : "Run"}
+                  </button>
+                  {runOutput.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <label className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                        Output
+                      </label>
+                      <pre
+                        className={`text-xs p-2 rounded border overflow-x-auto font-mono ${
+                          isDark ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-gray-50 border-gray-200 text-gray-800"
+                        }`}
+                        style={{ whiteSpace: "pre-wrap" }}
+                      >
+                        {normalizeForDisplay(runOutput.join("\n"))}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeIOTab.startsWith("test-") && (() => {
+                const testIndex = parseInt(activeIOTab.replace("test-", ""), 10);
+                const testCase = currentCheckpoint?.testCases?.[testIndex];
+                if (!testCase) return null;
+                const testOutput = testCaseOutputs[testIndex] || [];
+
+                return (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1">
+                      <label className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                        Input (from test case)
+                      </label>
+                      <pre
+                        className={`text-xs p-2 rounded border font-mono ${
+                          testCase.input
+                            ? isDark
+                              ? "bg-gray-800 border-gray-700 text-gray-200"
+                              : "bg-gray-50 border-gray-200 text-gray-800"
+                            : isDark
+                            ? "bg-gray-900 border-gray-800 text-gray-500"
+                            : "bg-gray-100 border-gray-300 text-gray-500"
+                        }`}
+                        style={{ whiteSpace: "pre-wrap" }}
+                      >
+                        {testCase.input || "(empty)"}
+                      </pre>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                        Expected Output
+                      </label>
+                      <pre
+                        className={`text-xs p-2 rounded border font-mono ${
+                          isDark ? "bg-gray-800 border-gray-700 text-green-300" : "bg-green-50 border-green-200 text-green-800"
+                        }`}
+                        style={{ whiteSpace: "pre-wrap" }}
+                      >
+                        {normalizeForDisplay(testCase.expectedOutput)}
+                      </pre>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRunCodeForTab(`test-${testIndex}`)}
+                      disabled={isRunning}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                        isDark ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
+                      } disabled:opacity-50`}
+                    >
+                      {isRunning ? "Running…" : "Run Test"}
+                    </button>
+                    {testOutput.length > 0 && (
+                      <div className="flex flex-col gap-1">
+                        <label className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                          Actual Output
+                        </label>
+                        <pre
+                          className={`text-xs p-2 rounded border overflow-x-auto font-mono ${
+                            isDark ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-gray-50 border-gray-200 text-gray-800"
+                          }`}
+                          style={{ whiteSpace: "pre-wrap" }}
+                        >
+                          {normalizeForDisplay(testOutput.join("\n"))}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
           )}
-        </div>
+        </details>
 
         {isExplainCheckpoint && (
           <div
@@ -793,9 +1051,6 @@ const LearningRoom: React.FC = () => {
               }`}
               rows={4}
             />
-            <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-              Use <strong>Mark complete</strong> when you’re satisfied, then click <strong>Next</strong>.
-            </p>
           </div>
         )}
 
@@ -827,9 +1082,13 @@ const LearningRoom: React.FC = () => {
         )}
 
         {currentCheckpoint?.testCases && currentCheckpoint.testCases.length > 0 && (
-          <div className={`rounded-lg border p-3 flex flex-col gap-2 ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"}`}>
+          <div
+            className={`rounded-lg border p-3 flex flex-col gap-2 ${
+              isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
+            }`}
+          >
             <p className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-              This checkpoint has test cases. Run tests and pass all before completing or moving to Next.
+              This checkpoint has test cases. Run tests and pass all before moving to Next.
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -842,20 +1101,63 @@ const LearningRoom: React.FC = () => {
                 Run tests
               </button>
               {testResult !== null && (
-                <span className={testResult.allPassed ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                <span
+                  className={
+                    testResult.allPassed ? "text-green-600 font-medium" : "text-red-600 font-medium"
+                  }
+                >
                   {testResult.allPassed ? "All tests passed" : "Some tests failed"}
                 </span>
               )}
             </div>
             {testResult?.results && testResult.results.length > 0 && (
-              <ul className={`text-xs space-y-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-                {testResult.results.map((r, i) => (
-                  <li key={i}>
-                    Test {i + 1}: {r.passed ? "✓" : "✗"}
-                    {!r.passed && ` expected "${r.expectedOutput}" got "${r.actualOutput}"`}
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-2 space-y-3 text-xs max-h-64 overflow-y-auto">
+                {testResult.results.map((r, i) => {
+                  const isError = r.actualOutput.startsWith("Error:");
+                  const passed = r.passed && !isError;
+                  const rawExpected =
+                    currentCheckpoint.testCases?.[i]?.expectedOutput ?? r.expectedOutput;
+                  const isExpanded = !passed;
+                  return (
+                    <details
+                      key={i}
+                      className={`rounded border p-2 ${
+                        passed
+                          ? isDark
+                            ? "border-green-500/60 bg-green-950/40"
+                            : "border-green-400 bg-green-50"
+                          : isDark
+                          ? "border-red-500/60 bg-red-950/40"
+                          : "border-red-400 bg-red-50"
+                      }`}
+                      open={isExpanded}
+                    >
+                      <summary className="flex items-center justify-between cursor-pointer select-none">
+                        <span className="font-semibold">Test {i + 1}</span>
+                        <span className={passed ? "text-green-500" : "text-red-500"}>
+                          {passed ? "✓ Passed" : "✗ Failed – click for details"}
+                        </span>
+                      </summary>
+                      <div className="mt-1 space-y-1">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {renderOutputBlock("Expected", rawExpected ?? r.expectedOutput)}
+                          {renderOutputBlock("Actual", r.actualOutput)}
+                        </div>
+                        {!passed &&
+                          renderLineDiff(
+                            rawExpected ?? r.expectedOutput,
+                            r.actualOutput
+                          )}
+                        {isError && (
+                          <div className="mt-1 text-[11px] text-red-400">
+                            Runtime error detected – fix the error or ask the AI guide for help.
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -863,17 +1165,6 @@ const LearningRoom: React.FC = () => {
         <div className="flex justify-between items-center mt-1">
           <div />
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleCompleteCheckpoint}
-              disabled={isCompletingCheckpoint}
-              className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm disabled:opacity-50 flex items-center gap-2"
-              title="Mark this checkpoint as completed"
-            >
-              {isCompletingCheckpoint && (
-                <AiOutlineLoading3Quarters className="animate-spin" />
-              )}
-              Mark complete
-            </button>
             <button
               onClick={handlePreviousCheckpoint}
               disabled={isPrevDisabled}
@@ -894,6 +1185,19 @@ const LearningRoom: React.FC = () => {
           </div>
         </div>
       </div>
+    );
+
+    return (
+      <AnySplitPane
+        split="horizontal"
+        minSize={220}
+        defaultSize={loadSize("learn-editor-height", 420)}
+        onChange={(size: number) => saveSize("learn-editor-height", size)}
+        style={{ height: "100%" }}
+      >
+        {topPanel}
+        {bottomPanel}
+      </AnySplitPane>
     );
   };
 
@@ -1079,10 +1383,31 @@ const LearningRoom: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen font-sans flex ${
+      className={`h-screen font-sans flex overflow-hidden ${
         isDark ? "bg-black text-gray-200" : "bg-gradient-to-br from-gray-50 to-blue-50"
       }`}
     >
+      {/* Toast overlay */}
+      {toast && (
+        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-start justify-end">
+          <div
+            className={`mt-4 mr-4 px-4 py-2 rounded-lg shadow-lg text-sm pointer-events-auto flex items-start gap-3 ${
+              toast.type === "success"
+                ? "bg-green-600 text-white"
+                : "bg-red-600 text-white"
+            }`}
+          >
+            <span className="flex-1">{toast.message}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="ml-2 text-xs font-semibold hover:opacity-80"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       <Sidebar
         showRooms
         onOpenAccount={() => setIsAccountOpen(true)}
@@ -1180,14 +1505,32 @@ const LearningRoom: React.FC = () => {
           </div>
         </nav>
 
-        <div className="flex flex-1 gap-4 overflow-hidden flex-col lg:flex-row">
-          <div className="w-full lg:w-64 flex-shrink-0">
-            {renderCheckpointList()}
-          </div>
-          <div className="flex-1 flex flex-col">{renderCenterPanel()}</div>
-          <div className="w-full lg:w-80 flex-shrink-0">
-            {renderRightPanel()}
-          </div>
+        <div className="flex flex-1 overflow-hidden min-h-0 relative" style={{ position: "relative" }}>
+          <AnySplitPane
+            split="vertical"
+            minSize={220}
+            defaultSize={loadSize("learn-left-width", 260)}
+            onChange={(size: number) => saveSize("learn-left-width", size)}
+            style={{ height: "100%" }}
+          >
+            <div className="w-full h-full flex-shrink-0 pr-2">
+              {renderCheckpointList()}
+            </div>
+            <AnySplitPane
+              split="vertical"
+              minSize={400}
+              defaultSize={loadSize("learn-center-width", 640)}
+              onChange={(size: number) => saveSize("learn-center-width", size)}
+              style={{ height: "100%" }}
+            >
+              <div className="flex-1 h-full pr-2 flex flex-col">
+                {renderCenterPanel()}
+              </div>
+              <div className="w-full h-full flex-shrink-0">
+                {renderRightPanel()}
+              </div>
+            </AnySplitPane>
+          </AnySplitPane>
         </div>
       </div>
       <AccountModal
@@ -1203,4 +1546,3 @@ const LearningRoom: React.FC = () => {
 };
 
 export default LearningRoom;
-
