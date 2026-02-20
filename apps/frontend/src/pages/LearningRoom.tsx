@@ -119,6 +119,7 @@ const LearningRoom: React.FC = () => {
     useState<number>(0);
 
   const [code, setCode] = useState<string>("# Python\n# Loading checkpoint...\n");
+  const [codeByCheckpoint, setCodeByCheckpoint] = useState<Record<string, string>>({});
   const [language, setLanguage] = useState<string>("python");
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [explanation, setExplanation] = useState("");
@@ -141,8 +142,24 @@ const LearningRoom: React.FC = () => {
   const [ioPanelCollapsed, setIoPanelCollapsed] = useState(false);
   const [activeIOTab, setActiveIOTab] = useState<string>("custom");
   const [testCaseOutputs, setTestCaseOutputs] = useState<Record<number, string[]>>({});
+  const centerRightSplitRef = useRef<HTMLDivElement>(null);
+  const [centerRightSplitWidth, setCenterRightSplitWidth] = useState(0);
+  const AI_PANEL_MIN_WIDTH = 280;
+  const currentCheckpointIdRef = useRef<string | undefined>(undefined);
 
   const roomIdFromUrl = params.roomId || user.roomId;
+
+  // Measure center+right split container so we can cap center maxSize and keep AI panel usable
+  useEffect(() => {
+    const el = centerRightSplitRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setCenterRightSplitWidth(el.offsetWidth);
+    });
+    ro.observe(el);
+    setCenterRightSplitWidth(el.offsetWidth);
+    return () => ro.disconnect();
+  }, []);
 
   // Sidebar closed by default on LearningRoom (non-landing pages)
   useEffect(() => {
@@ -243,19 +260,36 @@ const LearningRoom: React.FC = () => {
     fetchLearningState();
   }, [auth.token, roomIdFromUrl]);
 
-  // Apply starter code when checkpoint changes; clear run/test state
+  // Apply starter code when checkpoint changes; preserve code if we've seen this checkpoint before
   useEffect(() => {
     if (!currentCheckpoint) return;
-    if (currentCheckpoint.starterCode) {
-      setCode(currentCheckpoint.starterCode);
+    const checkpointId = currentCheckpoint.checkpointId;
+    currentCheckpointIdRef.current = checkpointId;
+    
+    // If we have saved code for this checkpoint, restore it; otherwise use starter code
+    if (codeByCheckpoint[checkpointId]) {
+      setCode(codeByCheckpoint[checkpointId]);
+    } else if (currentCheckpoint.starterCode) {
+      const starterCode = currentCheckpoint.starterCode;
+      setCode(starterCode);
+      // Save starter code as initial state for this checkpoint
+      setCodeByCheckpoint(prev => ({ ...prev, [checkpointId]: starterCode }));
     }
+    
     setTestResult(null);
-     setRunInput("");
-     setRunOutput([]);
-     setTestCaseOutputs({});
-     setActiveIOTab("custom");
-     setNavError(null);
+    setRunInput("");
+    setRunOutput([]);
+    setTestCaseOutputs({});
+    setActiveIOTab("custom");
+    setNavError(null);
   }, [currentCheckpoint?.checkpointId]);
+
+  // Save code whenever it changes (for the current checkpoint)
+  useEffect(() => {
+    if (!currentCheckpoint) return;
+    const checkpointId = currentCheckpoint.checkpointId;
+    setCodeByCheckpoint(prev => ({ ...prev, [checkpointId]: code }));
+  }, [code, currentCheckpoint?.checkpointId]);
 
   // Ensure there is a WebSocket connection for this room and
   // wire up basic listeners for users / code sync.
@@ -289,7 +323,14 @@ const LearningRoom: React.FC = () => {
       if (data.type === "users") {
         setConnectedUsers(data.users || []);
       }
-      if (data.type === "code") setCode(data.code);
+      if (data.type === "code") {
+        setCode(data.code);
+        // Also save to checkpoint-specific storage if we have a current checkpoint
+        const checkpointId = currentCheckpointIdRef.current;
+        if (checkpointId) {
+          setCodeByCheckpoint(prev => ({ ...prev, [checkpointId]: data.code }));
+        }
+      }
       if (data.type === "output") {
         if (data.sessionId === runSessionIdRef.current) {
           setRunOutput((prev) => [...prev, data.message ?? data.result ?? ""]);
@@ -582,9 +623,6 @@ const LearningRoom: React.FC = () => {
         </p>
         <ul className="space-y-2">
           {module.checkpoints.map((cp, index) => {
-            const cpProgress = progress?.checkpoints.find(
-              (p) => p.checkpointId === cp.checkpointId
-            );
             const isActive = index === currentCheckpointIndex;
             const isPast = index < currentCheckpointIndex;
             const isLocked = index > currentCheckpointIndex;
@@ -598,17 +636,23 @@ const LearningRoom: React.FC = () => {
                       : "bg-blue-100 border border-blue-400"
                     : isPast
                     ? isDark
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
+                      ? "bg-green-900/40 border border-green-700"
+                      : "bg-green-50 border border-green-200"
                     : isDark
                     ? "bg-gray-900 border border-gray-800 opacity-70"
                     : "bg-gray-100 border border-gray-200 opacity-70"
                 }`}
               >
-                <div className="mt-1">
-                  {isPast ? "✅" : isLocked ? "🔒" : "➡️"}
+                <div className="mt-1 flex-shrink-0">
+                  {isPast ? (
+                    <span className="text-green-500" aria-label="Completed">✓</span>
+                  ) : isLocked ? (
+                    <span className={isDark ? "text-gray-500" : "text-gray-400"} aria-label="Locked">🔒</span>
+                  ) : (
+                    <span className="text-blue-500" aria-label="Current">●</span>
+                  )}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p
                     className={`font-semibold ${
                       isDark ? "text-gray-200" : "text-gray-800"
@@ -623,12 +667,6 @@ const LearningRoom: React.FC = () => {
                   >
                     {cp.summary}
                   </p>
-                  {cpProgress && (
-                    <p className="text-[10px] mt-1 text-green-400">
-                      Status: {cpProgress.status}
-                      {cpProgress.explanationAccepted && " · Explanation accepted"}
-                    </p>
-                  )}
                 </div>
               </li>
             );
@@ -659,9 +697,9 @@ const LearningRoom: React.FC = () => {
         const isPrevDisabled = isAdvancing || currentCheckpointIndex === 0;
 
     const topPanel = (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 h-full overflow-hidden">
         <div
-          className={`rounded-lg border p-4 ${
+          className={`rounded-lg border p-4 flex-shrink-0 ${
             isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
           }`}
         >
@@ -690,7 +728,7 @@ const LearningRoom: React.FC = () => {
 
         {navError && (
           <div
-            className={`rounded-lg border px-4 py-2 text-sm ${
+            className={`rounded-lg border px-4 py-2 text-sm flex-shrink-0 ${
               isDark
                 ? "bg-red-900/30 border-red-900 text-red-200"
                 : "bg-red-50 border-red-200 text-red-700"
@@ -701,7 +739,7 @@ const LearningRoom: React.FC = () => {
         )}
 
         <div
-          className={`flex-1 rounded-lg border overflow-hidden ${
+          className={`flex-1 rounded-lg border overflow-hidden min-h-0 ${
             isDark ? "bg-gray-900 border-gray-800" : "bg-gray-50 border-gray-200"
           }`}
         >
@@ -718,79 +756,11 @@ const LearningRoom: React.FC = () => {
               fontSize: 14,
               readOnly: !canEditCode,
             }}
+            height="100%"
           />
         </div>
       </div>
     );
-
-    const renderOutputBlock = (label: string, text: string) => (
-      <div>
-        <div
-          className={`text-[11px] font-semibold mb-1 ${
-            isDark ? "text-gray-400" : "text-gray-500"
-          }`}
-        >
-          {label}
-        </div>
-        <pre
-          className={`text-xs rounded border px-2 py-1 font-mono overflow-x-auto ${
-            isDark
-              ? "bg-gray-900 border-gray-700 text-gray-100"
-              : "bg-gray-50 border-gray-300 text-gray-900"
-          }`}
-          style={{ whiteSpace: "pre-wrap" }}
-        >
-          {normalizeForDisplay(text)}
-        </pre>
-      </div>
-    );
-
-    const renderLineDiff = (expectedRaw: string, actualRaw: string) => {
-      const expected = normalizeForDisplay(expectedRaw).split("\n");
-      const actual = normalizeForDisplay(actualRaw).split("\n");
-      const maxLen = Math.max(expected.length, actual.length);
-      return (
-        <div className="mt-2 border rounded text-[11px] overflow-auto">
-          <div
-            className={`px-2 py-1 font-semibold ${
-              isDark ? "bg-gray-900 text-gray-200" : "bg-gray-100 text-gray-800"
-            }`}
-          >
-            Line-by-line diff
-          </div>
-          <div className="max-h-40 overflow-auto">
-            {Array.from({ length: maxLen }).map((_, i) => {
-              const e = expected[i] ?? "";
-              const a = actual[i] ?? "";
-              const same = e === a;
-              return (
-                <div
-                  key={i}
-                  className={`grid grid-cols-2 gap-1 px-2 py-0.5 border-t ${
-                    same
-                      ? isDark
-                        ? "border-gray-800"
-                        : "border-gray-200"
-                      : isDark
-                      ? "bg-red-900/30 border-red-900"
-                      : "bg-red-50 border-red-200"
-                  }`}
-                >
-                  <div className="font-mono">
-                    <span className="mr-1 text-[10px] opacity-60">{i + 1}E:</span>
-                    {e === "" ? "∅" : e}
-                  </div>
-                  <div className="font-mono">
-                    <span className="mr-1 text-[10px] opacity-60">{i + 1}A:</span>
-                    {a === "" ? "∅" : a}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    };
 
     const handleRunCodeForTab = async (tabId: string) => {
       if (!roomIdFromUrl) return;
@@ -848,55 +818,30 @@ const LearningRoom: React.FC = () => {
     };
 
     const bottomPanel = (
-      <div className="flex flex-col gap-3">
-        <details
-          open={!ioPanelCollapsed}
-          className={`rounded-lg border ${
+      <div className="flex flex-col h-full overflow-hidden">
+        <div
+          className={`flex-1 overflow-y-auto rounded-lg border ${
             isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
           }`}
         >
-          <summary
-            className={`px-3 py-2 cursor-pointer select-none flex items-center justify-between ${
-              isDark ? "hover:bg-gray-800" : "hover:bg-gray-50"
+          <div
+            className={`px-3 py-2 border-b flex items-center justify-between ${
+              isDark ? "border-gray-800" : "border-gray-200"
             }`}
-            onClick={(e) => {
-              e.preventDefault();
-              setIoPanelCollapsed(!ioPanelCollapsed);
-            }}
           >
             <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>
               Input / Output
             </p>
-            <span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-              {ioPanelCollapsed ? "▼" : "▲"}
-            </span>
-          </summary>
-          {!ioPanelCollapsed && (
-            <div className="p-3 flex flex-col gap-3">
-              {/* Tabs */}
-              <div className="flex gap-2 border-b overflow-x-auto">
-                <button
-                  type="button"
-                  onClick={() => setActiveIOTab("custom")}
-                  className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
-                    activeIOTab === "custom"
-                      ? isDark
-                        ? "border-blue-500 text-blue-400"
-                        : "border-blue-600 text-blue-600"
-                      : isDark
-                      ? "border-transparent text-gray-400 hover:text-gray-300"
-                      : "border-transparent text-gray-600 hover:text-gray-800"
-                  }`}
-                >
-                  Custom I/O
-                </button>
-                {currentCheckpoint?.testCases?.map((_, index) => (
+          </div>
+          <div className="p-3 flex flex-col gap-3">
+              {/* Tabs + Run all tests when there are fixed test cases */}
+              <div className="flex flex-wrap items-center gap-2 border-b overflow-x-auto pb-2">
+                <div className="flex gap-1 flex-1 min-w-0">
                   <button
-                    key={`test-${index}`}
                     type="button"
-                    onClick={() => setActiveIOTab(`test-${index}`)}
+                    onClick={() => setActiveIOTab("custom")}
                     className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
-                      activeIOTab === `test-${index}`
+                      activeIOTab === "custom"
                         ? isDark
                           ? "border-blue-500 text-blue-400"
                           : "border-blue-600 text-blue-600"
@@ -905,9 +850,44 @@ const LearningRoom: React.FC = () => {
                         : "border-transparent text-gray-600 hover:text-gray-800"
                     }`}
                   >
-                    Test {index + 1}
+                    Custom I/O
                   </button>
-                ))}
+                  {currentCheckpoint?.testCases?.map((_, index) => {
+                    const result = testResult?.results?.[index];
+                    const passed = result?.passed;
+                    const ran = result !== undefined;
+                    return (
+                      <button
+                        key={`test-${index}`}
+                        type="button"
+                        onClick={() => setActiveIOTab(`test-${index}`)}
+                        className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors flex items-center gap-1 ${
+                          activeIOTab === `test-${index}`
+                            ? isDark
+                              ? "border-blue-500 text-blue-400"
+                              : "border-blue-600 text-blue-600"
+                            : isDark
+                            ? "border-transparent text-gray-400 hover:text-gray-300"
+                            : "border-transparent text-gray-600 hover:text-gray-800"
+                        }`}
+                      >
+                        Test {index + 1}
+                        {ran && (passed ? <span className="text-green-500">✓</span> : <span className="text-red-500">✗</span>)}
+                      </button>
+                    );
+                  })}
+                </div>
+                {currentCheckpoint?.testCases && currentCheckpoint.testCases.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleRunTests}
+                    disabled={isRunningTests}
+                    className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                  >
+                    {isRunningTests && <AiOutlineLoading3Quarters className="animate-spin" />}
+                    Run all tests
+                  </button>
+                )}
               </div>
 
               {/* Tab Content */}
@@ -960,15 +940,18 @@ const LearningRoom: React.FC = () => {
                 const testCase = currentCheckpoint?.testCases?.[testIndex];
                 if (!testCase) return null;
                 const testOutput = testCaseOutputs[testIndex] || [];
+                const runResult = testResult?.results?.[testIndex];
+                const passed = runResult?.passed;
+                const hasRunResult = runResult !== undefined;
 
                 return (
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-col gap-1">
                       <label className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                        Input (from test case)
+                        Input (fixed test case – read-only)
                       </label>
                       <pre
-                        className={`text-xs p-2 rounded border font-mono ${
+                        className={`text-xs p-2 rounded border font-mono select-none ${
                           testCase.input
                             ? isDark
                               ? "bg-gray-800 border-gray-700 text-gray-200"
@@ -984,10 +967,10 @@ const LearningRoom: React.FC = () => {
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                        Expected Output
+                        Expected Output (read-only)
                       </label>
                       <pre
-                        className={`text-xs p-2 rounded border font-mono ${
+                        className={`text-xs p-2 rounded border font-mono select-none ${
                           isDark ? "bg-gray-800 border-gray-700 text-green-300" : "bg-green-50 border-green-200 text-green-800"
                         }`}
                         style={{ whiteSpace: "pre-wrap" }}
@@ -1003,9 +986,14 @@ const LearningRoom: React.FC = () => {
                         isDark ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
                       } disabled:opacity-50`}
                     >
-                      {isRunning ? "Running…" : "Run Test"}
+                      {isRunning ? "Running…" : "Run this test"}
                     </button>
-                    {testOutput.length > 0 && (
+                    {hasRunResult && (
+                      <div className={`text-xs font-medium ${passed ? "text-green-600" : "text-red-600"}`}>
+                        {passed ? "✓ Passed" : "✗ Failed"}
+                      </div>
+                    )}
+                    {(testOutput.length > 0 || (hasRunResult && runResult)) && (
                       <div className="flex flex-col gap-1">
                         <label className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
                           Actual Output
@@ -1016,16 +1004,15 @@ const LearningRoom: React.FC = () => {
                           }`}
                           style={{ whiteSpace: "pre-wrap" }}
                         >
-                          {normalizeForDisplay(testOutput.join("\n"))}
+                          {normalizeForDisplay(hasRunResult && runResult ? runResult.actualOutput : testOutput.join("\n"))}
                         </pre>
                       </div>
                     )}
                   </div>
                 );
               })()}
-            </div>
-          )}
-        </details>
+          </div>
+        </div>
 
         {isExplainCheckpoint && (
           <div
@@ -1081,88 +1068,7 @@ const LearningRoom: React.FC = () => {
           </div>
         )}
 
-        {currentCheckpoint?.testCases && currentCheckpoint.testCases.length > 0 && (
-          <div
-            className={`rounded-lg border p-3 flex flex-col gap-2 ${
-              isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
-            }`}
-          >
-            <p className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-              This checkpoint has test cases. Run tests and pass all before moving to Next.
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleRunTests}
-                disabled={isRunningTests}
-                className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-sm disabled:opacity-50 flex items-center gap-2"
-              >
-                {isRunningTests && <AiOutlineLoading3Quarters className="animate-spin" />}
-                Run tests
-              </button>
-              {testResult !== null && (
-                <span
-                  className={
-                    testResult.allPassed ? "text-green-600 font-medium" : "text-red-600 font-medium"
-                  }
-                >
-                  {testResult.allPassed ? "All tests passed" : "Some tests failed"}
-                </span>
-              )}
-            </div>
-            {testResult?.results && testResult.results.length > 0 && (
-              <div className="mt-2 space-y-3 text-xs max-h-64 overflow-y-auto">
-                {testResult.results.map((r, i) => {
-                  const isError = r.actualOutput.startsWith("Error:");
-                  const passed = r.passed && !isError;
-                  const rawExpected =
-                    currentCheckpoint.testCases?.[i]?.expectedOutput ?? r.expectedOutput;
-                  const isExpanded = !passed;
-                  return (
-                    <details
-                      key={i}
-                      className={`rounded border p-2 ${
-                        passed
-                          ? isDark
-                            ? "border-green-500/60 bg-green-950/40"
-                            : "border-green-400 bg-green-50"
-                          : isDark
-                          ? "border-red-500/60 bg-red-950/40"
-                          : "border-red-400 bg-red-50"
-                      }`}
-                      open={isExpanded}
-                    >
-                      <summary className="flex items-center justify-between cursor-pointer select-none">
-                        <span className="font-semibold">Test {i + 1}</span>
-                        <span className={passed ? "text-green-500" : "text-red-500"}>
-                          {passed ? "✓ Passed" : "✗ Failed – click for details"}
-                        </span>
-                      </summary>
-                      <div className="mt-1 space-y-1">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {renderOutputBlock("Expected", rawExpected ?? r.expectedOutput)}
-                          {renderOutputBlock("Actual", r.actualOutput)}
-                        </div>
-                        {!passed &&
-                          renderLineDiff(
-                            rawExpected ?? r.expectedOutput,
-                            r.actualOutput
-                          )}
-                        {isError && (
-                          <div className="mt-1 text-[11px] text-red-400">
-                            Runtime error detected – fix the error or ask the AI guide for help.
-                          </div>
-                        )}
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex justify-between items-center mt-1">
+        <div className="flex justify-between items-center pt-2 pb-1 flex-shrink-0">
           <div />
           <div className="flex items-center gap-2">
             <button
@@ -1191,7 +1097,7 @@ const LearningRoom: React.FC = () => {
       <AnySplitPane
         split="horizontal"
         minSize={220}
-        defaultSize={loadSize("learn-editor-height", 420)}
+        defaultSize={loadSize("learn-editor-height", 320)}
         onChange={(size: number) => saveSize("learn-editor-height", size)}
         style={{ height: "100%" }}
       >
@@ -1516,20 +1422,23 @@ const LearningRoom: React.FC = () => {
             <div className="w-full h-full flex-shrink-0 pr-2">
               {renderCheckpointList()}
             </div>
-            <AnySplitPane
-              split="vertical"
-              minSize={400}
-              defaultSize={loadSize("learn-center-width", 640)}
-              onChange={(size: number) => saveSize("learn-center-width", size)}
-              style={{ height: "100%" }}
-            >
-              <div className="flex-1 h-full pr-2 flex flex-col">
-                {renderCenterPanel()}
-              </div>
-              <div className="w-full h-full flex-shrink-0">
-                {renderRightPanel()}
-              </div>
-            </AnySplitPane>
+            <div ref={centerRightSplitRef} className="w-full h-full flex flex-col min-w-0">
+              <AnySplitPane
+                split="vertical"
+                minSize={400}
+                maxSize={centerRightSplitWidth > 0 ? centerRightSplitWidth - AI_PANEL_MIN_WIDTH : undefined}
+                defaultSize={loadSize("learn-center-width", centerRightSplitWidth > 0 ? Math.max(400, Math.min(640, centerRightSplitWidth - AI_PANEL_MIN_WIDTH - 20)) : 600)}
+                onChange={(size: number) => saveSize("learn-center-width", size)}
+                style={{ height: "100%" }}
+              >
+                <div className="flex-1 h-full pr-2 flex flex-col min-w-0">
+                  {renderCenterPanel()}
+                </div>
+                <div className="w-full h-full flex-shrink-0 min-w-0">
+                  {renderRightPanel()}
+                </div>
+              </AnySplitPane>
+            </div>
           </AnySplitPane>
         </div>
       </div>
