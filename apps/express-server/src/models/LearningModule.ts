@@ -32,7 +32,7 @@ export interface ICheckpoint {
    * completed / advanced when all tests pass (code run with each input must
    * produce the corresponding expectedOutput, after normalizing whitespace).
    */
-  testCases?: Array<{ input: string; expectedOutput: string }>;
+  testCases?: Array<{ input: string; expectedOutput: string; hint?: string }>;
   // For some checkpoints we can require explicit peer review before progressing.
   requirePeerReview?: boolean;
   // Default AI mode for this checkpoint. The frontend can override
@@ -43,9 +43,12 @@ export interface ICheckpoint {
 export interface ILearningModule extends Document {
   moduleId: string; // Stable identifier, e.g. "loops-beginners"
   title: string;
+  description?: string; // Brief description shown in module selection
   language: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   estimatedTimeMinutes: number;
+  tags?: string[]; // e.g., ["basics", "control-flow"]
+  prerequisites?: string[]; // moduleIds that should be completed first
   checkpoints: ICheckpoint[];
   createdAt: Date;
   updatedAt: Date;
@@ -89,6 +92,7 @@ const CheckpointSchema = new Schema<ICheckpoint>(
       {
         input: { type: String, default: '' },
         expectedOutput: { type: String, required: true },
+        hint: { type: String },
       },
     ],
     requirePeerReview: {
@@ -119,12 +123,15 @@ const LearningModuleSchema = new Schema<ILearningModule>(
       required: true,
       trim: true,
     },
+    description: {
+      type: String,
+      trim: true,
+    },
     language: {
       type: String,
       required: true,
       trim: true,
-      // For now we support a single language per module.
-      // This can be generalized later if needed.
+      index: true, // Index for grouping by language
     },
     difficulty: {
       type: String,
@@ -136,6 +143,15 @@ const LearningModuleSchema = new Schema<ILearningModule>(
       type: Number,
       required: true,
       min: 1,
+    },
+    tags: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+    prerequisites: {
+      type: [String],
+      default: [],
     },
     checkpoints: {
       type: [CheckpointSchema],

@@ -47,12 +47,7 @@ const Register = () => {
         setIsSidebarOpen(true);
     }, []);
 
-    // Redirect authenticated users to dashboard when on "/" without roomId
-    useEffect(() => {
-        if (auth.isAuthenticated && !params.roomId) {
-            navigate('/dashboard');
-        }
-    }, [auth.isAuthenticated, params.roomId, navigate]);
+    // Note: Removed auto-redirect to dashboard to allow creating new rooms from "/"
 
     useEffect(() => {
         document.title = "CoLearn - Collaborative Coding";

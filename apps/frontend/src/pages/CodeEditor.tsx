@@ -572,7 +572,7 @@ const CodeEditor: React.FC = () => {
       return (
         <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
           <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiUsers /> Members & Room
+            <FiUsers /> Room
           </h2>
           <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
             <div>
@@ -847,21 +847,18 @@ const CodeEditor: React.FC = () => {
               onClick={() => handlePanelToggle("info")}
               className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'info' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
             >
-              <FiUsers /> Members & Room
+              <FiUsers /> Room
             </button>
-            {/* Learning section: Learn button that opens the guided module */}
-            <div className="flex flex-col ml-2">
-              <button
-                onClick={() => {
-                  const effectiveRoomId = user.roomId || params.roomId;
-                  if (!effectiveRoomId) return;
-                  navigate(`/learn/${effectiveRoomId}/choose`);
-                }}
-                className={`mt-1 px-3 py-1.5 rounded-md text-xs font-medium ${isDark ? "bg-blue-700 text-white hover:bg-blue-600" : "bg-blue-600 text-white hover:bg-blue-700"} transition-all`}
-              >
-                Learn
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                const effectiveRoomId = user.roomId || params.roomId;
+                if (!effectiveRoomId) return;
+                navigate(`/learn/${effectiveRoomId}/choose`);
+              }}
+              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${isDark ? 'bg-blue-700 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700'} hover:scale-105 active:scale-95`}
+            >
+              <FiBox /> Modules
+            </button>
           </div>
           <div className="flex items-center gap-3">
             <select

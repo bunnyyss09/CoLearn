@@ -1,25 +1,225 @@
 {
   "modules": [
     {
+      "moduleId": "python-variables",
+      "title": "Variables & Data Types",
+      "description": "Learn how to create variables and work with different data types in Python.",
+      "language": "python",
+      "difficulty": "beginner",
+      "estimatedTimeMinutes": 20,
+      "tags": ["basics", "variables", "data-types"],
+      "prerequisites": [],
+      "checkpoints": [
+        {
+          "checkpointId": "pv-1-predict",
+          "title": "Predict variable values",
+          "type": "predict-output",
+          "summary": "Trace variable assignments and predict the output.",
+          "description": "Look at the code below and predict what will be printed. Think about how variables store and change values.\n\nFocus on the order of assignments.",
+          "starterCode": "# Python\nx = 5\ny = x\nx = 10\nprint(y)\nprint(x)",
+          "readOnlyCode": true,
+          "expectedOutput": "5\n10",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "pv-2-fix",
+          "title": "Fix the type error",
+          "type": "fix-code",
+          "summary": "Debug code with a type mismatch.",
+          "description": "The code below tries to combine a string and a number but causes an error. Fix it so it prints the message correctly.",
+          "starterCode": "# Python\nage = 25\nmessage = \"I am \" + age + \" years old\"\nprint(message)",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "I am 25 years old", "hint": "Use str() to convert the number to a string" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pv-3-write",
+          "title": "Swap two variables",
+          "type": "write-code",
+          "summary": "Write code to swap values of two variables.",
+          "description": "Given two variables `a = 10` and `b = 20`, swap their values so that `a` becomes 20 and `b` becomes 10. Then print both values.\n\nTry to do it without using a third variable!",
+          "starterCode": "# Python\na = 10\nb = 20\n# TODO: Swap the values\n\nprint(a)\nprint(b)",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "20\n10", "hint": "Python allows tuple unpacking: a, b = b, a" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pv-4-reflect",
+          "title": "Reflection",
+          "type": "reflection",
+          "summary": "Reflect on what you learned about variables.",
+          "description": "Write a short reflection (2-4 sentences) about:\n- What surprised you about how variables work?\n- What's the difference between a variable's name and its value?",
+          "readOnlyCode": true,
+          "aiMode": "summarizer"
+        }
+      ]
+    },
+    {
+      "moduleId": "python-conditionals",
+      "title": "Conditionals (if/else)",
+      "description": "Master decision-making in code with if, elif, and else statements.",
+      "language": "python",
+      "difficulty": "beginner",
+      "estimatedTimeMinutes": 25,
+      "tags": ["basics", "control-flow", "conditionals"],
+      "prerequisites": ["python-variables"],
+      "checkpoints": [
+        {
+          "checkpointId": "pc-1-predict",
+          "title": "Predict the branch",
+          "type": "predict-output",
+          "summary": "Trace through conditionals to predict output.",
+          "description": "Read the code carefully and predict which branch will execute. Think about how Python evaluates conditions.",
+          "starterCode": "# Python\nx = 15\nif x > 20:\n    print(\"big\")\nelif x > 10:\n    print(\"medium\")\nelse:\n    print(\"small\")",
+          "readOnlyCode": true,
+          "expectedOutput": "medium",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "pc-2-fix",
+          "title": "Fix the grading logic",
+          "type": "fix-code",
+          "summary": "Debug incorrect conditional logic.",
+          "description": "This grading program doesn't work correctly. A score of 85 should print \"B\" but it prints \"C\". Fix the logic.",
+          "starterCode": "# Python\nscore = 85\nif score >= 90:\n    print(\"A\")\nif score >= 80:\n    print(\"B\")\nif score >= 70:\n    print(\"C\")\nelse:\n    print(\"F\")",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "B", "hint": "Use elif instead of multiple if statements" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pc-3-write",
+          "title": "Number classifier",
+          "type": "write-code",
+          "summary": "Write code to classify a number.",
+          "description": "Write a program that classifies a number `n = 7`:\n- Print \"positive\" if n > 0\n- Print \"negative\" if n < 0\n- Print \"zero\" if n == 0",
+          "starterCode": "# Python\nn = 7\n# TODO: Classify the number\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "positive", "hint": "Use if/elif/else to check each condition" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pc-4-write-advanced",
+          "title": "Leap year checker",
+          "type": "write-code",
+          "summary": "Write code to check if a year is a leap year.",
+          "description": "A year is a leap year if:\n- It's divisible by 4 AND\n- Either NOT divisible by 100, OR divisible by 400\n\nCheck if year 2024 is a leap year and print \"leap\" or \"not leap\".",
+          "starterCode": "# Python\nyear = 2024\n# TODO: Check if it's a leap year\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "leap", "hint": "Use % (modulo) to check divisibility" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pc-5-explain",
+          "title": "Explain conditionals",
+          "type": "explain-to-unlock",
+          "summary": "Explain how conditionals work.",
+          "description": "In your own words, explain:\n1. What's the difference between `if` and `elif`?\n2. When does the `else` block execute?\n\nWrite 3-5 sentences.",
+          "readOnlyCode": true,
+          "aiMode": "review"
+        }
+      ]
+    },
+    {
+      "moduleId": "python-loops-beginner",
+      "title": "Loops (for & while)",
+      "description": "Learn the basics of for and while loops to repeat code efficiently.",
+      "language": "python",
+      "difficulty": "beginner",
+      "estimatedTimeMinutes": 25,
+      "tags": ["basics", "control-flow", "iteration"],
+      "prerequisites": ["python-variables", "python-conditionals"],
+      "checkpoints": [
+        {
+          "checkpointId": "plb-1-predict",
+          "title": "Predict loop output",
+          "type": "predict-output",
+          "summary": "Trace loop execution and predict output.",
+          "description": "Read the code and predict what will be printed. Count how many times the loop runs.",
+          "starterCode": "# Python\nfor i in range(3):\n    print(i)",
+          "readOnlyCode": true,
+          "expectedOutput": "0\n1\n2",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "plb-2-fix",
+          "title": "Fix infinite loop",
+          "type": "fix-code",
+          "summary": "Debug an infinite while loop.",
+          "description": "This while loop runs forever! Fix it so it prints 1, 2, 3 and stops.",
+          "starterCode": "# Python\ni = 1\nwhile i <= 3:\n    print(i)",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "1\n2\n3", "hint": "You need to increment i inside the loop" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "plb-3-write",
+          "title": "Sum 1 to 5",
+          "type": "write-code",
+          "summary": "Calculate sum using a loop.",
+          "description": "Use a for loop to calculate the sum of numbers from 1 to 5. Print the final sum.",
+          "starterCode": "# Python\n# TODO: Sum numbers 1 to 5\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "15", "hint": "Initialize total = 0, then add each number in the loop" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "plb-4-write",
+          "title": "Print even numbers",
+          "type": "write-code",
+          "summary": "Use a loop to print specific numbers.",
+          "description": "Print all even numbers from 2 to 10 (inclusive), each on a new line.",
+          "starterCode": "# Python\n# TODO: Print even numbers 2 to 10\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "2\n4\n6\n8\n10", "hint": "Use range(2, 11, 2) or check with if i % 2 == 0" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "plb-5-reflect",
+          "title": "Reflection",
+          "type": "reflection",
+          "summary": "Reflect on when to use each loop type.",
+          "description": "Write about:\n- When would you use a for loop vs a while loop?\n- What mistake is easy to make with while loops?",
+          "readOnlyCode": true,
+          "aiMode": "summarizer"
+        }
+      ]
+    },
+    {
       "moduleId": "python-loops-advanced",
-      "title": "Python Loops – Patterns & Edge Cases",
+      "title": "Loops – Patterns & Edge Cases",
+      "description": "Master nested loops and handle edge cases in iteration.",
       "language": "python",
       "difficulty": "intermediate",
       "estimatedTimeMinutes": 35,
+      "tags": ["loops", "patterns", "nested-loops"],
+      "prerequisites": ["python-loops-beginner"],
       "checkpoints": [
         {
           "checkpointId": "pla-1-pattern-print",
-          "title": "Print a right triangle of stars",
+          "title": "Print a right triangle",
           "type": "write-code",
           "summary": "Use nested loops to print a triangle pattern.",
-          "description": "Write a program that prints a right triangle of `*` characters with height **3**.\n\nThe expected output is:\n```text\n*\n**\n***\n```",
-          "starterCode": "# Python\n# TODO: print the triangle pattern described in the checkpoint.\n",
+          "description": "Write a program that prints a right triangle of `*` characters with height **3**.\n\nExpected output:\n```\n*\n**\n***\n```",
+          "starterCode": "# Python\n# TODO: print the triangle pattern\n",
           "readOnlyCode": false,
           "testCases": [
-            {
-              "input": "",
-              "expectedOutput": "*\n**\n***"
-            }
+            { "input": "", "expectedOutput": "*\n**\n***", "hint": "Use a nested loop where inner loop runs i+1 times" }
           ],
           "aiMode": "hint"
         },
@@ -27,21 +227,636 @@
           "checkpointId": "pla-2-sum-list",
           "title": "Sum a list safely",
           "type": "fix-code",
-          "summary": "Fix a loop that crashes on empty lists.",
-          "description": "The code below should compute the sum of a list of numbers but crashes on empty lists. Fix it so that it returns 0 for an empty list.\n\nUse a `for` loop; do not call `sum()` directly.",
-          "starterCode": "# Python\nnums = [1, 2, 3]\nresult = 0\nfor i in range(len(nums) + 1):\n    result += nums[i]\nprint(result)\n",
+          "summary": "Fix a loop that crashes on edge cases.",
+          "description": "This code should compute the sum of a list but crashes on empty lists. Fix it to return 0 for empty lists.\n\nDo not use the built-in `sum()` function.",
+          "starterCode": "# Python\nnums = [1, 2, 3]\nresult = 0\nfor i in range(len(nums) + 1):\n    result += nums[i]\nprint(result)",
           "readOnlyCode": false,
           "testCases": [
-            {
-              "input": "",
-              "expectedOutput": "6"
-            },
-            {
-              "input": "",
-              "expectedOutput": "0"
-            }
+            { "input": "", "expectedOutput": "6", "hint": "range(len(nums) + 1) goes one index too far" }
           ],
           "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "pla-3-multiplication-table",
+          "title": "Multiplication table",
+          "type": "write-code",
+          "summary": "Print a 3x3 multiplication table.",
+          "description": "Print a multiplication table for numbers 1-3.\n\nExpected output:\n```\n1 2 3\n2 4 6\n3 6 9\n```",
+          "starterCode": "# Python\n# TODO: Print 3x3 multiplication table\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "1 2 3\n2 4 6\n3 6 9", "hint": "Use two nested loops and print with end=' '" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pla-4-reflect",
+          "title": "Reflection",
+          "type": "reflection",
+          "summary": "Reflect on loop patterns.",
+          "description": "Write about:\n- When would you use nested loops?\n- What common mistakes did you encounter?",
+          "readOnlyCode": true,
+          "aiMode": "summarizer"
+        }
+      ]
+    },
+    {
+      "moduleId": "python-functions",
+      "title": "Functions & Parameters",
+      "description": "Learn to write reusable code with functions, parameters, and return values.",
+      "language": "python",
+      "difficulty": "intermediate",
+      "estimatedTimeMinutes": 30,
+      "tags": ["functions", "parameters", "return"],
+      "prerequisites": ["python-variables", "python-conditionals"],
+      "checkpoints": [
+        {
+          "checkpointId": "pf-1-predict",
+          "title": "Predict function output",
+          "type": "predict-output",
+          "summary": "Trace function calls and predict the result.",
+          "description": "Read the code and predict what will be printed. Pay attention to how parameters are passed.",
+          "starterCode": "# Python\ndef greet(name):\n    return \"Hello, \" + name + \"!\"\n\nmessage = greet(\"Alice\")\nprint(message)",
+          "readOnlyCode": true,
+          "expectedOutput": "Hello, Alice!",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "pf-2-fix",
+          "title": "Fix the return statement",
+          "type": "fix-code",
+          "summary": "Debug a function that doesn't return correctly.",
+          "description": "This function should return the square of a number, but it prints instead of returning. Fix it.",
+          "starterCode": "# Python\ndef square(n):\n    print(n * n)\n\nresult = square(5)\nprint(result)",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "25", "hint": "Replace print() with return" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pf-3-write",
+          "title": "Write a max function",
+          "type": "write-code",
+          "summary": "Create a function to find the maximum of two numbers.",
+          "description": "Write a function `max_of_two(a, b)` that returns the larger of two numbers. Then call it with 10 and 25, and print the result.",
+          "starterCode": "# Python\n# TODO: Write the max_of_two function\n\nprint(max_of_two(10, 25))",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "25", "hint": "Use an if statement to compare a and b" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pf-4-write-default",
+          "title": "Default parameters",
+          "type": "write-code",
+          "summary": "Write a function with default parameter values.",
+          "description": "Write a function `power(base, exp=2)` that raises base to the power of exp. If exp isn't provided, it should default to 2 (squaring).\n\nPrint `power(3)` and `power(2, 3)`.",
+          "starterCode": "# Python\n# TODO: Write power function with default exp=2\n\nprint(power(3))\nprint(power(2, 3))",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "9\n8", "hint": "Use def power(base, exp=2): and base ** exp" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pf-5-explain",
+          "title": "Explain return vs print",
+          "type": "explain-to-unlock",
+          "summary": "Explain the difference between return and print.",
+          "description": "In 3-5 sentences, explain:\n- What's the difference between `return` and `print`?\n- When should you use each?",
+          "readOnlyCode": true,
+          "aiMode": "review"
+        }
+      ]
+    },
+    {
+      "moduleId": "python-lists",
+      "title": "Lists & List Methods",
+      "description": "Work with Python lists: creation, indexing, slicing, and common methods.",
+      "language": "python",
+      "difficulty": "intermediate",
+      "estimatedTimeMinutes": 35,
+      "tags": ["data-structures", "lists", "indexing"],
+      "prerequisites": ["python-variables", "python-loops-beginner"],
+      "checkpoints": [
+        {
+          "checkpointId": "pl-1-predict",
+          "title": "Predict list operations",
+          "type": "predict-output",
+          "summary": "Trace list modifications and predict output.",
+          "description": "Read the code and predict the final output. Pay attention to how lists are modified.",
+          "starterCode": "# Python\nnums = [1, 2, 3]\nnums.append(4)\nnums[0] = 10\nprint(nums)",
+          "readOnlyCode": true,
+          "expectedOutput": "[10, 2, 3, 4]",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "pl-2-fix",
+          "title": "Fix the index error",
+          "type": "fix-code",
+          "summary": "Debug list indexing issues.",
+          "description": "This code tries to access list elements but has an index error. Fix it to print the last element correctly.",
+          "starterCode": "# Python\nitems = [\"a\", \"b\", \"c\"]\nprint(items[3])",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "c", "hint": "List indices start at 0, so items[2] is the last element, or use items[-1]" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pl-3-write-sum",
+          "title": "Sum a list manually",
+          "type": "write-code",
+          "summary": "Calculate the sum of a list using a loop.",
+          "description": "Given a list `nums = [5, 10, 15, 20]`, calculate and print the sum using a for loop. Don't use the `sum()` function.",
+          "starterCode": "# Python\nnums = [5, 10, 15, 20]\n# TODO: Calculate and print the sum\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "50", "hint": "Initialize total = 0, then add each element" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pl-4-write-reverse",
+          "title": "Reverse a list",
+          "type": "write-code",
+          "summary": "Reverse a list without using built-in reverse.",
+          "description": "Given `letters = [\"a\", \"b\", \"c\", \"d\"]`, print it reversed as a list. Don't use `.reverse()` or `reversed()`.\n\nHint: Use slicing!",
+          "starterCode": "# Python\nletters = [\"a\", \"b\", \"c\", \"d\"]\n# TODO: Print reversed list\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "['d', 'c', 'b', 'a']", "hint": "Use slice notation: list[::-1]" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pl-5-reflect",
+          "title": "Reflection",
+          "type": "reflection",
+          "summary": "Reflect on lists and when to use them.",
+          "description": "Write about:\n- When would you use a list instead of separate variables?\n- What's the most useful list method you learned?",
+          "readOnlyCode": true,
+          "aiMode": "summarizer"
+        }
+      ]
+    },
+    {
+      "moduleId": "python-strings",
+      "title": "String Manipulation",
+      "description": "Learn to work with text: slicing, methods, and formatting.",
+      "language": "python",
+      "difficulty": "intermediate",
+      "estimatedTimeMinutes": 25,
+      "tags": ["strings", "text", "formatting"],
+      "prerequisites": ["python-variables"],
+      "checkpoints": [
+        {
+          "checkpointId": "ps-1-predict",
+          "title": "Predict string output",
+          "type": "predict-output",
+          "summary": "Trace string operations.",
+          "description": "Read the code and predict the output. Remember that strings are immutable!",
+          "starterCode": "# Python\ntext = \"Hello\"\ntext = text.upper()\nprint(text[1:4])",
+          "readOnlyCode": true,
+          "expectedOutput": "ELL",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "ps-2-write",
+          "title": "Count vowels",
+          "type": "write-code",
+          "summary": "Count vowels in a string.",
+          "description": "Count and print the number of vowels (a, e, i, o, u) in the string \"hello world\". Ignore case.",
+          "starterCode": "# Python\ntext = \"hello world\"\n# TODO: Count and print vowels\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "3", "hint": "Loop through each character and check if it's in 'aeiou'" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "ps-3-write-format",
+          "title": "String formatting",
+          "type": "write-code",
+          "summary": "Use f-strings for formatting.",
+          "description": "Given `name = \"Alice\"` and `age = 30`, print: `Alice is 30 years old` using an f-string.",
+          "starterCode": "# Python\nname = \"Alice\"\nage = 30\n# TODO: Print using f-string\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "Alice is 30 years old", "hint": "Use f\"{name} is {age} years old\"" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "ps-4-reflect",
+          "title": "Reflection",
+          "type": "reflection",
+          "summary": "Reflect on string manipulation.",
+          "description": "Write about what string methods you find most useful and why strings being immutable matters.",
+          "readOnlyCode": true,
+          "aiMode": "summarizer"
+        }
+      ]
+    },
+    {
+      "moduleId": "python-dictionaries",
+      "title": "Dictionaries",
+      "description": "Store and retrieve data using key-value pairs.",
+      "language": "python",
+      "difficulty": "intermediate",
+      "estimatedTimeMinutes": 30,
+      "tags": ["data-structures", "dictionaries", "key-value"],
+      "prerequisites": ["python-variables", "python-lists"],
+      "checkpoints": [
+        {
+          "checkpointId": "pd-1-predict",
+          "title": "Predict dictionary access",
+          "type": "predict-output",
+          "summary": "Trace dictionary operations.",
+          "description": "Read the code and predict the output.",
+          "starterCode": "# Python\nperson = {\"name\": \"Bob\", \"age\": 25}\nperson[\"age\"] = 26\nprint(person[\"name\"], person[\"age\"])",
+          "readOnlyCode": true,
+          "expectedOutput": "Bob 26",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "pd-2-fix",
+          "title": "Fix key error",
+          "type": "fix-code",
+          "summary": "Handle missing dictionary keys safely.",
+          "description": "This code crashes when accessing a missing key. Fix it to print \"Unknown\" if the key doesn't exist.",
+          "starterCode": "# Python\ndata = {\"a\": 1, \"b\": 2}\nprint(data[\"c\"])",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "Unknown", "hint": "Use data.get(\"c\", \"Unknown\") for safe access" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pd-3-write",
+          "title": "Word frequency",
+          "type": "write-code",
+          "summary": "Count word frequencies using a dictionary.",
+          "description": "Given the list `words = [\"a\", \"b\", \"a\", \"c\", \"b\", \"a\"]`, count each word and print the count of \"a\".",
+          "starterCode": "# Python\nwords = [\"a\", \"b\", \"a\", \"c\", \"b\", \"a\"]\n# TODO: Count words and print count of \"a\"\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "3", "hint": "Use a dict to store counts, increment for each word" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "pd-4-explain",
+          "title": "Explain dictionaries",
+          "type": "explain-to-unlock",
+          "summary": "Explain when to use dictionaries vs lists.",
+          "description": "In 3-5 sentences, explain:\n- When would you use a dictionary instead of a list?\n- What makes dictionaries fast for lookups?",
+          "readOnlyCode": true,
+          "aiMode": "review"
+        }
+      ]
+    },
+    {
+      "moduleId": "js-variables",
+      "title": "Variables (let, const, var)",
+      "description": "Understand JavaScript variable declarations and scoping.",
+      "language": "javascript",
+      "difficulty": "beginner",
+      "estimatedTimeMinutes": 20,
+      "tags": ["basics", "variables", "scoping"],
+      "prerequisites": [],
+      "checkpoints": [
+        {
+          "checkpointId": "jv-1-predict",
+          "title": "Predict variable behavior",
+          "type": "predict-output",
+          "summary": "Trace let and const assignments.",
+          "description": "Read the code and predict what will be printed.",
+          "starterCode": "// JavaScript\nlet x = 5;\nconst y = 10;\nx = x + y;\nconsole.log(x);",
+          "readOnlyCode": true,
+          "expectedOutput": "15",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "jv-2-fix",
+          "title": "Fix the const error",
+          "type": "fix-code",
+          "summary": "Debug const reassignment error.",
+          "description": "This code tries to reassign a const, which causes an error. Fix it by using the correct declaration.",
+          "starterCode": "// JavaScript\nconst count = 1;\ncount = count + 1;\nconsole.log(count);",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "2", "hint": "Use let instead of const for variables that change" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jv-3-write",
+          "title": "Calculate total",
+          "type": "write-code",
+          "summary": "Use variables to calculate a total.",
+          "description": "Declare variables for `price = 100` and `tax = 0.1`. Calculate the total (price + price*tax) and print it.",
+          "starterCode": "// JavaScript\n// TODO: Declare variables and calculate total\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "110", "hint": "Use let price = 100, tax = 0.1; then total = price + price * tax" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jv-4-reflect",
+          "title": "Reflection",
+          "type": "reflection",
+          "summary": "Reflect on let vs const vs var.",
+          "description": "Write about:\n- When should you use let vs const?\n- Why is var generally avoided in modern JavaScript?",
+          "readOnlyCode": true,
+          "aiMode": "summarizer"
+        }
+      ]
+    },
+    {
+      "moduleId": "js-conditionals",
+      "title": "Conditionals & Comparisons",
+      "description": "Control program flow with if/else and comparison operators.",
+      "language": "javascript",
+      "difficulty": "beginner",
+      "estimatedTimeMinutes": 25,
+      "tags": ["basics", "control-flow", "conditionals"],
+      "prerequisites": ["js-variables"],
+      "checkpoints": [
+        {
+          "checkpointId": "jc-1-predict",
+          "title": "Predict the branch",
+          "type": "predict-output",
+          "summary": "Trace conditional execution.",
+          "description": "Read the code and predict which branch executes.",
+          "starterCode": "// JavaScript\nconst score = 75;\nif (score >= 90) {\n    console.log(\"A\");\n} else if (score >= 70) {\n    console.log(\"B\");\n} else {\n    console.log(\"C\");\n}",
+          "readOnlyCode": true,
+          "expectedOutput": "B",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "jc-2-fix",
+          "title": "Fix equality check",
+          "type": "fix-code",
+          "summary": "Debug loose vs strict equality.",
+          "description": "This code should print \"not equal\" but prints \"equal\" due to type coercion. Fix it using strict equality.",
+          "starterCode": "// JavaScript\nconst a = \"5\";\nconst b = 5;\nif (a == b) {\n    console.log(\"equal\");\n} else {\n    console.log(\"not equal\");\n}",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "not equal", "hint": "Use === instead of == for strict equality" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jc-3-write",
+          "title": "Check if even or odd",
+          "type": "write-code",
+          "summary": "Write code to check even/odd.",
+          "description": "Given `num = 7`, print \"even\" if it's even, or \"odd\" if it's odd.",
+          "starterCode": "// JavaScript\nconst num = 7;\n// TODO: Check and print even or odd\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "odd", "hint": "Use num % 2 === 0 to check if even" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jc-4-write-ternary",
+          "title": "Use ternary operator",
+          "type": "write-code",
+          "summary": "Simplify conditionals with ternary.",
+          "description": "Given `age = 20`, use a ternary operator to print \"adult\" if age >= 18, otherwise \"minor\".",
+          "starterCode": "// JavaScript\nconst age = 20;\n// TODO: Use ternary operator\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "adult", "hint": "Use: console.log(age >= 18 ? \"adult\" : \"minor\")" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jc-5-explain",
+          "title": "Explain == vs ===",
+          "type": "explain-to-unlock",
+          "summary": "Explain JavaScript equality operators.",
+          "description": "In 3-5 sentences, explain:\n- What's the difference between == and ===?\n- Why is === generally preferred?",
+          "readOnlyCode": true,
+          "aiMode": "review"
+        }
+      ]
+    },
+    {
+      "moduleId": "js-loops",
+      "title": "Loops (for, while, forEach)",
+      "description": "Iterate over data with different loop constructs.",
+      "language": "javascript",
+      "difficulty": "beginner",
+      "estimatedTimeMinutes": 30,
+      "tags": ["basics", "loops", "iteration"],
+      "prerequisites": ["js-variables", "js-conditionals"],
+      "checkpoints": [
+        {
+          "checkpointId": "jl-1-predict",
+          "title": "Predict loop output",
+          "type": "predict-output",
+          "summary": "Trace loop execution.",
+          "description": "Read the code and predict the output.",
+          "starterCode": "// JavaScript\nfor (let i = 1; i <= 3; i++) {\n    console.log(i * 2);\n}",
+          "readOnlyCode": true,
+          "expectedOutput": "2\n4\n6",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "jl-2-fix",
+          "title": "Fix infinite loop",
+          "type": "fix-code",
+          "summary": "Debug a loop that never ends.",
+          "description": "This while loop runs forever. Fix it so it prints 1, 2, 3 and then stops.",
+          "starterCode": "// JavaScript\nlet i = 1;\nwhile (i <= 3) {\n    console.log(i);\n}",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "1\n2\n3", "hint": "Add i++ inside the loop to increment i" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jl-3-write",
+          "title": "Sum 1 to 5",
+          "type": "write-code",
+          "summary": "Calculate sum using a loop.",
+          "description": "Use a for loop to calculate the sum of numbers from 1 to 5 and print the result.",
+          "starterCode": "// JavaScript\n// TODO: Calculate sum of 1 to 5\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "15", "hint": "Initialize sum = 0, then add each i in the loop" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jl-4-write-array",
+          "title": "Loop through array",
+          "type": "write-code",
+          "summary": "Iterate over array elements.",
+          "description": "Given `fruits = [\"apple\", \"banana\", \"cherry\"]`, print each fruit on a new line using a for...of loop.",
+          "starterCode": "// JavaScript\nconst fruits = [\"apple\", \"banana\", \"cherry\"];\n// TODO: Print each fruit\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "apple\nbanana\ncherry", "hint": "Use: for (const fruit of fruits)" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jl-5-reflect",
+          "title": "Reflection",
+          "type": "reflection",
+          "summary": "Reflect on when to use each loop type.",
+          "description": "Write about:\n- When would you use for vs while?\n- What's the advantage of for...of over a regular for loop?",
+          "readOnlyCode": true,
+          "aiMode": "summarizer"
+        }
+      ]
+    },
+    {
+      "moduleId": "js-functions",
+      "title": "Functions & Arrow Functions",
+      "description": "Write reusable code with traditional and arrow function syntax.",
+      "language": "javascript",
+      "difficulty": "intermediate",
+      "estimatedTimeMinutes": 30,
+      "tags": ["functions", "arrow-functions", "callbacks"],
+      "prerequisites": ["js-variables", "js-loops"],
+      "checkpoints": [
+        {
+          "checkpointId": "jf-1-predict",
+          "title": "Predict function output",
+          "type": "predict-output",
+          "summary": "Trace function calls.",
+          "description": "Read the code and predict what will be printed.",
+          "starterCode": "// JavaScript\nfunction add(a, b) {\n    return a + b;\n}\nconst result = add(3, 4);\nconsole.log(result);",
+          "readOnlyCode": true,
+          "expectedOutput": "7",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "jf-2-fix",
+          "title": "Fix missing return",
+          "type": "fix-code",
+          "summary": "Debug a function that returns undefined.",
+          "description": "This function should multiply two numbers but returns undefined. Fix it.",
+          "starterCode": "// JavaScript\nfunction multiply(a, b) {\n    a * b;\n}\nconsole.log(multiply(3, 4));",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "12", "hint": "Add return before a * b" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jf-3-write",
+          "title": "Write an arrow function",
+          "type": "write-code",
+          "summary": "Create an arrow function.",
+          "description": "Create an arrow function `double` that takes a number and returns it multiplied by 2. Then print `double(5)`.",
+          "starterCode": "// JavaScript\n// TODO: Create arrow function double\n\nconsole.log(double(5));",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "10", "hint": "Use: const double = (n) => n * 2;" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jf-4-write-callback",
+          "title": "Use a callback function",
+          "type": "write-code",
+          "summary": "Pass a function as an argument.",
+          "description": "Given `nums = [1, 2, 3]`, use the `.map()` method with an arrow function to create a new array where each number is squared.Print the new array.",
+          "starterCode": "// JavaScript\nconst nums = [1, 2, 3];\n// TODO: Use map to square each number\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "[ 1, 4, 9 ]", "hint": "Use: nums.map(n => n * n)" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "jf-5-explain",
+          "title": "Explain arrow functions",
+          "type": "explain-to-unlock",
+          "summary": "Explain regular vs arrow functions.",
+          "description": "In 3-5 sentences, explain:\n- How is arrow function syntax different from regular functions?\n- When might you prefer one over the other?",
+          "readOnlyCode": true,
+          "aiMode": "review"
+        }
+      ]
+    },
+    {
+      "moduleId": "js-arrays",
+      "title": "Arrays & Array Methods",
+      "description": "Master JavaScript arrays and powerful built-in methods.",
+      "language": "javascript",
+      "difficulty": "intermediate",
+      "estimatedTimeMinutes": 35,
+      "tags": ["data-structures", "arrays", "methods"],
+      "prerequisites": ["js-variables", "js-loops"],
+      "checkpoints": [
+        {
+          "checkpointId": "ja-1-predict",
+          "title": "Predict array methods",
+          "type": "predict-output",
+          "summary": "Trace array method calls.",
+          "description": "Read the code and predict the output.",
+          "starterCode": "// JavaScript\nconst arr = [1, 2, 3];\narr.push(4);\narr.shift();\nconsole.log(arr);",
+          "readOnlyCode": true,
+          "expectedOutput": "[ 2, 3, 4 ]",
+          "aiMode": "socratic"
+        },
+        {
+          "checkpointId": "ja-2-write-filter",
+          "title": "Filter an array",
+          "type": "write-code",
+          "summary": "Use filter to select elements.",
+          "description": "Given `nums = [1, 2, 3, 4, 5, 6]`, use `.filter()` to create a new array with only even numbers. Print it.",
+          "starterCode": "// JavaScript\nconst nums = [1, 2, 3, 4, 5, 6];\n// TODO: Filter even numbers\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "[ 2, 4, 6 ]", "hint": "Use: nums.filter(n => n % 2 === 0)" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "ja-3-write-reduce",
+          "title": "Sum with reduce",
+          "type": "write-code",
+          "summary": "Use reduce to aggregate values.",
+          "description": "Given `nums = [10, 20, 30]`, use `.reduce()` to calculate the sum. Print the result.",
+          "starterCode": "// JavaScript\nconst nums = [10, 20, 30];\n// TODO: Sum using reduce\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "60", "hint": "Use: nums.reduce((sum, n) => sum + n, 0)" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "ja-4-write-find",
+          "title": "Find an element",
+          "type": "write-code",
+          "summary": "Use find to locate a specific element.",
+          "description": "Given `users = [{name: 'Alice', age: 25}, {name: 'Bob', age: 30}]`, use `.find()` to get the user named \"Bob\" and print their age.",
+          "starterCode": "// JavaScript\nconst users = [{name: 'Alice', age: 25}, {name: 'Bob', age: 30}];\n// TODO: Find Bob and print his age\n",
+          "readOnlyCode": false,
+          "testCases": [
+            { "input": "", "expectedOutput": "30", "hint": "Use: users.find(u => u.name === 'Bob').age" }
+          ],
+          "aiMode": "hint"
+        },
+        {
+          "checkpointId": "ja-5-reflect",
+          "title": "Reflection",
+          "type": "reflection",
+          "summary": "Reflect on array methods.",
+          "description": "Write about:\n- Which array method do you find most useful and why?\n- When would you use reduce vs a regular loop?",
+          "readOnlyCode": true,
+          "aiMode": "summarizer"
         }
       ]
     }
