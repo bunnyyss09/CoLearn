@@ -14,6 +14,7 @@ import User from "./models/User";
 import Code from "./models/Code";
 import Notes from "./models/Notes";
 import AiMessage from "./models/AiMessage";
+import LearningModule from "./models/LearningModule";
 import { v4 as uuidv4 } from "uuid";
 import { generateToken, authenticateToken, AuthRequest } from "./utils/auth";
 import learningRouter, { ensureDefaultLearningModules } from "./routes/learning";
@@ -436,6 +437,65 @@ app.get("/room/:roomId", async (req, res) => {
   } catch (error) {
     console.error("Error fetching room:", error);
     res.status(500).json({ error: "Failed to fetch room" });
+  }
+});
+
+// Get detailed room info with member names and module details
+app.get("/room/:roomId/details", authenticateToken, async (req: AuthRequest, res) => {
+  const { roomId } = req.params;
+
+  try {
+    const room = await Room.findOne({ roomId });
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    // Check if user is a member
+    if (!req.user || !room.members.includes(req.user.userId)) {
+      return res.status(403).json({ error: "You are not a member of this room" });
+    }
+
+    // Get member names
+    const memberUsers = await User.find({ _id: { $in: room.members } }).select('_id name');
+    const memberNames = room.members.map(memberId => {
+      const memberUser = memberUsers.find(u => u._id === memberId);
+      return memberUser ? memberUser.name : memberId;
+    });
+
+    // Get owner name
+    const ownerUser = memberUsers.find(u => u._id === room.ownerId);
+    const ownerName = ownerUser ? ownerUser.name : room.ownerId;
+
+    // Get module info if learning room
+    let moduleName, moduleDescription, totalCheckpoints;
+    if (room.isLearningRoom && room.moduleId) {
+      const moduleInfo = await LearningModule.findOne({ moduleId: room.moduleId });
+      if (moduleInfo) {
+        moduleName = moduleInfo.title;
+        moduleDescription = `${moduleInfo.difficulty} • ${moduleInfo.estimatedTimeMinutes} min • ${moduleInfo.language}`;
+        totalCheckpoints = moduleInfo.checkpoints.length;
+      }
+    }
+
+    res.status(200).json({
+      room: {
+        roomId: room.roomId,
+        ownerId: room.ownerId,
+        ownerName,
+        members: room.members,
+        memberNames,
+        isLearningRoom: room.isLearningRoom || false,
+        moduleId: room.moduleId,
+        moduleName,
+        moduleDescription,
+        currentCheckpointIndex: room.currentCheckpointIndex || 0,
+        totalCheckpoints,
+        createdAt: room.createdAt,
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching room details:", error);
+    res.status(500).json({ error: "Failed to fetch room details" });
   }
 });
 

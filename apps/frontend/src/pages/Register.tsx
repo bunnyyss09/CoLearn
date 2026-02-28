@@ -47,6 +47,13 @@ const Register = () => {
         setIsSidebarOpen(true);
     }, []);
 
+    // Redirect authenticated users to dashboard when on "/" without roomId
+    useEffect(() => {
+        if (auth.isAuthenticated && !params.roomId) {
+            navigate('/dashboard');
+        }
+    }, [auth.isAuthenticated, params.roomId, navigate]);
+
     useEffect(() => {
         document.title = "CoLearn - Collaborative Coding";
         // Pre-fill room ID from the URL parameter
@@ -131,6 +138,10 @@ const Register = () => {
             token: token,
         });
         setShowAuthModal(false);
+        // Redirect to dashboard after login if not joining a specific room
+        if (!params.roomId) {
+            navigate('/dashboard');
+        }
     };
 
     // This is your original, working socket logic

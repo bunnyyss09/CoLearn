@@ -5,7 +5,7 @@ import { userAtom } from "../atoms/userAtom";
 import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import { themeAtom } from "../atoms/themeAtom";
 import { IP_ADDRESS } from "../Globle";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { AiOutlineDelete } from "react-icons/ai";
 
 type Room = { roomId: string; members?: string[]; ownerId?: string };
@@ -27,7 +27,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const theme = useRecoilValue(themeAtom);
   const [rooms, setRooms] = useState<Room[]>([]);
   const navigate = useNavigate();
-  const location = useLocation();
   const isDark = theme === "dark";
 
   useEffect(() => {
@@ -61,13 +60,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       return;
     }
     
-    // Open room in new tab
-    const url = location.pathname.startsWith("/code/") 
-      ? `/code/${roomId}` 
-      : `/${roomId}`;
-    
-    // Open in new tab
-    window.open(url, '_blank');
+    // Navigate to dashboard with room selected
+    navigate(`/dashboard/${roomId}`);
   };
 
   const handleDeleteRoom = async (roomId: string, e: React.MouseEvent) => {
