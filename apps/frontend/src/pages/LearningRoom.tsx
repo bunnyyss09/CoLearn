@@ -29,6 +29,9 @@ import {
 } from "react-icons/fi";
 import { AiOutlineSend, AiOutlineLoading3Quarters } from "react-icons/ai";
 
+// Debounce delay for code sync (ms)
+const CODE_SYNC_DEBOUNCE_MS = 150;
+
 type AiMode = "socratic" | "hint" | "review" | "summarizer" | undefined;
 
 type CheckpointType =
@@ -146,8 +149,22 @@ const LearningRoom: React.FC = () => {
   const [centerRightSplitWidth, setCenterRightSplitWidth] = useState(0);
   const AI_PANEL_MIN_WIDTH = 280;
   const currentCheckpointIdRef = useRef<string | undefined>(undefined);
+  
+  // Debounce timer for code sync
+  const codeSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Flag to prevent echo when receiving remote code
+  const isRemoteUpdateRef = useRef(false);
 
   const roomIdFromUrl = params.roomId || user.roomId;
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (codeSyncTimeoutRef.current) {
+        clearTimeout(codeSyncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Measure center+right split container so we can cap center maxSize and keep AI panel usable
   useEffect(() => {
@@ -324,12 +341,15 @@ const LearningRoom: React.FC = () => {
         setConnectedUsers(data.users || []);
       }
       if (data.type === "code") {
+        // Set flag to prevent echo when receiving remote code
+        isRemoteUpdateRef.current = true;
         setCode(data.code);
         // Also save to checkpoint-specific storage if we have a current checkpoint
         const checkpointId = currentCheckpointIdRef.current;
         if (checkpointId) {
           setCodeByCheckpoint(prev => ({ ...prev, [checkpointId]: data.code }));
         }
+        setTimeout(() => { isRemoteUpdateRef.current = false; }, 50);
       }
       if (data.type === "output") {
         if (data.sessionId === runSessionIdRef.current) {
@@ -387,15 +407,37 @@ const LearningRoom: React.FC = () => {
   const handleEditorDidMount = (editor: any) => {
     editor.onDidChangeModelContent(() => {
       const currentCode = editor.getValue();
-      if (currentCode !== code && socket?.readyState === WebSocket.OPEN) {
-        socket.send(
-          JSON.stringify({
-            type: "code",
-            code: currentCode,
-            roomId: roomIdFromUrl,
-          })
-        );
+      
+      // Update local state immediately for responsive UI
+      setCode(currentCode);
+      
+      // Also save to checkpoint-specific storage
+      const checkpointId = currentCheckpointIdRef.current;
+      if (checkpointId) {
+        setCodeByCheckpoint(prev => ({ ...prev, [checkpointId]: currentCode }));
       }
+      
+      // Skip sending if this is a remote update
+      if (isRemoteUpdateRef.current) {
+        return;
+      }
+      
+      // Debounce the WebSocket send
+      if (codeSyncTimeoutRef.current) {
+        clearTimeout(codeSyncTimeoutRef.current);
+      }
+      
+      codeSyncTimeoutRef.current = setTimeout(() => {
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              type: "code",
+              code: currentCode,
+              roomId: roomIdFromUrl,
+            })
+          );
+        }
+      }, CODE_SYNC_DEBOUNCE_MS);
     });
   };
 
@@ -748,9 +790,6 @@ const LearningRoom: React.FC = () => {
             language={language}
             theme={isDark ? "vs-dark" : "vs"}
             onMount={handleEditorDidMount}
-            onChange={(value) => {
-              setCode(value || "");
-            }}
             options={{
               minimap: { enabled: false },
               fontSize: 14,

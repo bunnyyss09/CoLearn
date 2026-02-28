@@ -18,6 +18,9 @@ import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+// Debounce delay for code sync (ms) - prevents flooding WebSocket on fast typing
+const CODE_SYNC_DEBOUNCE_MS = 150;
+
 // AI Message type
 type AiMessage = {
   sender: 'user' | 'ai';
@@ -60,6 +63,19 @@ const CodeEditor: React.FC = () => {
   const [ioPanelHeight, setIoPanelHeight] = useState(200);
   const ioDragInfoRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
+  // Refs to prevent stale closures in WebSocket handlers
+  const codeRef = useRef(code);
+  const languageRef = useRef(language);
+  const currentButtonStateRef = useRef(currentButtonState);
+  const isLoadingRef = useRef(isLoading);
+  const ioSessionsRef = useRef(ioSessions);
+  const activeIoSessionIdRef = useRef(activeIoSessionId);
+  
+  // Debounce timer ref for code sync
+  const codeSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Flag to prevent echo: when we receive code from server, don't re-send it
+  const isRemoteUpdateRef = useRef(false);
+
 
   // AI Assistant State
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
@@ -81,6 +97,23 @@ const CodeEditor: React.FC = () => {
 
   // Sidebar panel state
   const [activePanel, setActivePanel] = useState<"ai" | "chat" | "info" | null>("ai");
+
+  // Keep refs in sync with state to avoid stale closures in callbacks
+  useEffect(() => { codeRef.current = code; }, [code]);
+  useEffect(() => { languageRef.current = language; }, [language]);
+  useEffect(() => { currentButtonStateRef.current = currentButtonState; }, [currentButtonState]);
+  useEffect(() => { isLoadingRef.current = isLoading; }, [isLoading]);
+  useEffect(() => { ioSessionsRef.current = ioSessions; }, [ioSessions]);
+  useEffect(() => { activeIoSessionIdRef.current = activeIoSessionId; }, [activeIoSessionId]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (codeSyncTimeoutRef.current) {
+        clearTimeout(codeSyncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Sidebar closed by default on non-landing pages
   useEffect(() => {
@@ -206,7 +239,7 @@ const CodeEditor: React.FC = () => {
     // If we have a socket but user.roomId doesn't match params.roomId, we need to reconnect
     if (socket && params.roomId && user.roomId !== params.roomId) {
       // Close existing socket and redirect to join the new room
-      if (socket.readyState === WebSocket.OPEN) {
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
         socket.close();
       }
       setSocket(null);
@@ -227,7 +260,8 @@ const CodeEditor: React.FC = () => {
     }
     
     return () => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
+      // Clean up socket on unmount - handle both OPEN and CONNECTING states
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
         socket.close();
       }
     };
@@ -239,7 +273,13 @@ const CodeEditor: React.FC = () => {
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === "users") setConnectedUsers(data.users);
-        if (data.type === "code") setCode(data.code);
+        if (data.type === "code") {
+          // Set flag to prevent echo when we receive remote code
+          isRemoteUpdateRef.current = true;
+          setCode(data.code);
+          // Clear the flag after a short delay to allow state to settle
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 50);
+        }
         if (data.type === "language") setLanguage(data.language);
         if (data.type === "submitBtnStatus") {
           setCurrentButtonState(data.value);
@@ -257,25 +297,28 @@ const CodeEditor: React.FC = () => {
         }
 
         if (data.type === "requestForAllData" && socket.readyState === WebSocket.OPEN) {
+          // Use refs to get current values (avoids stale closure)
           socket.send(JSON.stringify({
             type: "allData",
-            code,
-            language,
-            currentButtonState,
-            isLoading,
-            ioSessions,
-            activeIoSessionId,
+            code: codeRef.current,
+            language: languageRef.current,
+            currentButtonState: currentButtonStateRef.current,
+            isLoading: isLoadingRef.current,
+            ioSessions: ioSessionsRef.current,
+            activeIoSessionId: activeIoSessionIdRef.current,
             userId: data.userId
           }));
         }
 
         if (data.type === "allData") {
+          isRemoteUpdateRef.current = true;
           setCode(data.code);
           setLanguage(data.language);
           setCurrentButtonState(data.currentButtonState);
           setIsLoading(data.isLoading);
           setIoSessions(data.ioSessions || [{ id: 1, input: "", output: [] }]); // fallback for older clients
           setActiveIoSessionId(data.activeIoSessionId || 1);
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 50);
         }
 
         // Shared AI assistant messages: whenever any user in the room
@@ -295,7 +338,7 @@ const CodeEditor: React.FC = () => {
         }
       };
     }
-  }, [code, language, currentButtonState, isLoading, socket, connectedUsers, ioSessions, activeIoSessionId, user.roomId, params.roomId, navigate]);
+  }, [socket, user.roomId, params.roomId, navigate, setConnectedUsers]);
 
   useEffect(() => {
     aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -687,9 +730,25 @@ const CodeEditor: React.FC = () => {
   const handleEditorDidMount = (editor: any) => {
     editor.onDidChangeModelContent(() => {
       const currentCode = editor.getValue();
-      if (currentCode !== code && socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "code", code: currentCode, roomId: user.roomId }));
+      
+      // Update local state immediately for responsive UI
+      setCode(currentCode);
+      
+      // Skip sending if this is a remote update (received from another user)
+      if (isRemoteUpdateRef.current) {
+        return;
       }
+      
+      // Debounce the WebSocket send to prevent flooding
+      if (codeSyncTimeoutRef.current) {
+        clearTimeout(codeSyncTimeoutRef.current);
+      }
+      
+      codeSyncTimeoutRef.current = setTimeout(() => {
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "code", code: currentCode, roomId: user.roomId }));
+        }
+      }, CODE_SYNC_DEBOUNCE_MS);
     });
   };
 
@@ -857,7 +916,6 @@ const CodeEditor: React.FC = () => {
                 language={language}
                 theme={isDark ? "vs-dark" : "vs"}
                 onMount={handleEditorDidMount}
-                onChange={(value) => setCode(value)}
                 options={{ minimap: { enabled: false }, fontSize: 14 }}
               />
             </div>
