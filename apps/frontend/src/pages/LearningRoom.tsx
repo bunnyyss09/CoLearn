@@ -117,7 +117,7 @@ const LearningRoom: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [module, setModule] = useState<LearningModule | null>(null);
-  const [progress, setProgress] = useState<LearningProgress | null>(null);
+  const [_progress, setProgress] = useState<LearningProgress | null>(null);
   const [currentCheckpointIndex, setCurrentCheckpointIndex] =
     useState<number>(0);
 
@@ -142,7 +142,7 @@ const LearningRoom: React.FC = () => {
   const [runOutput, setRunOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const runSessionIdRef = useRef(1);
-  const [ioPanelCollapsed, setIoPanelCollapsed] = useState(false);
+  const [_ioPanelCollapsed, _setIoPanelCollapsed] = useState(false);
   const [activeIOTab, setActiveIOTab] = useState<string>("custom");
   const [testCaseOutputs, setTestCaseOutputs] = useState<Record<number, string[]>>({});
   const centerRightSplitRef = useRef<HTMLDivElement>(null);
@@ -518,6 +518,7 @@ const LearningRoom: React.FC = () => {
       output: runOutput.join("\n"),
       roomId: roomIdFromUrl,
       userName,
+      userId: user.id,  // Include userId for learning profile tracking
       checkpointType: currentCheckpoint.type,
       checkpointTitle: currentCheckpoint.title,
       checkpointDescription: currentCheckpoint.description,

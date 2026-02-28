@@ -18,6 +18,11 @@ import { v4 as uuidv4 } from "uuid";
 import { generateToken, authenticateToken, AuthRequest } from "./utils/auth";
 import learningRouter, { ensureDefaultLearningModules } from "./routes/learning";
 import { seedLearningModulesFromJson } from "./utils/seedLearningModulesFromJson";
+import {
+  recordAiInteraction,
+  getUserAiContext,
+  getUserProfileData,
+} from "./utils/learningProfileService";
 
 const app = express();
 app.use(express.json());
@@ -144,6 +149,7 @@ app.post('/ai-tutor', async (req, res) => {
     output,
     roomId,
     userName,
+    userId,  // Optional: for tracking learning profile
     checkpointType,
     checkpointTitle,
     checkpointDescription,
@@ -155,6 +161,15 @@ app.post('/ai-tutor', async (req, res) => {
       return res.status(400).json({ error: "Missing required fields: userQuery, language, or code." });
   }
   try {
+      // Get user learning context if userId is provided
+      let userLearningContext = '';
+      if (userId) {
+        // Track this AI interaction for the user's learning profile
+        await recordAiInteraction(userId, userQuery, code);
+        // Get personalized context about the user's learning journey
+        userLearningContext = await getUserAiContext(userId);
+      }
+
       const aiResponseText = await getAiTutorResponse({
         userQuery,
         language,
@@ -168,6 +183,7 @@ app.post('/ai-tutor', async (req, res) => {
         aiMode,
         moduleTitle,
         moduleSummary,
+        userLearningContext,
       });
       
       // Save user message and AI response to database if roomId is provided (public room AI chat)
@@ -546,6 +562,62 @@ app.put("/code/:roomId", async (req, res) => {
   } catch (error) {
     console.error("Error updating code:", error);
     res.status(500).json({ error: "Failed to update code" });
+  }
+});
+
+// Get user's learning profile
+app.get("/learning-profile/:userId", authenticateToken, async (req: AuthRequest, res) => {
+  const { userId } = req.params;
+
+  // Ensure user can only access their own profile (or we could allow admins)
+  if (!req.user || req.user.userId !== userId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  try {
+    const profileData = await getUserProfileData(userId);
+    
+    if (!profileData) {
+      return res.status(200).json({
+        message: "No learning data yet",
+        profile: {
+          weaknesses: [],
+          strengths: [],
+          metrics: {
+            totalAiQuestions: 0,
+            totalTestFailures: 0,
+            totalTestPasses: 0,
+            topTopics: [],
+          },
+          learningPace: 'unknown',
+          recentErrors: [],
+        }
+      });
+    }
+
+    res.status(200).json({ profile: profileData });
+  } catch (error) {
+    console.error("Error fetching learning profile:", error);
+    res.status(500).json({ error: "Failed to fetch learning profile" });
+  }
+});
+
+// Get learning insights/summary for a user (simpler endpoint for quick display)
+app.get("/learning-profile/:userId/summary", authenticateToken, async (req: AuthRequest, res) => {
+  const { userId } = req.params;
+
+  if (!req.user || req.user.userId !== userId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  try {
+    const summary = await getUserAiContext(userId);
+    res.status(200).json({ 
+      summary: summary || "Keep learning! Your profile will build up as you interact with the AI tutor and complete exercises."
+    });
+  } catch (error) {
+    console.error("Error fetching learning summary:", error);
+    res.status(500).json({ error: "Failed to fetch learning summary" });
   }
 });
 

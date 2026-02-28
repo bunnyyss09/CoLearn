@@ -44,7 +44,7 @@ const CodeEditor: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false); // Loading state for code submission
   const [currentButtonState, setCurrentButtonState] = useState("Run Code");
   const [user, setUser] = useRecoilState(userAtom);
-  const [auth, setAuth] = useRecoilState(authAtom);
+  const auth = useRecoilValue(authAtom);
   const navigate = useNavigate();
   const [isCopied, setIsCopied] = useState(false);
   const theme = useRecoilValue(themeAtom);
@@ -92,8 +92,8 @@ const CodeEditor: React.FC = () => {
   const [chatId, setChatId] = useState<string>("");
 
   // Learning room metadata (if this room has been upgraded to a module)
-  const [isLearningRoom, setIsLearningRoom] = useState<boolean>(false);
-  const [learningModuleId, setLearningModuleId] = useState<string | null>(null);
+  const [_isLearningRoom, setIsLearningRoom] = useState<boolean>(false);
+  const [_learningModuleId, setLearningModuleId] = useState<string | null>(null);
 
   // Sidebar panel state
   const [activePanel, setActivePanel] = useState<"ai" | "chat" | "info" | null>("ai");
@@ -646,6 +646,7 @@ const CodeEditor: React.FC = () => {
       output: activeSession.output.join('\n'), // Send joined output
       roomId: effectiveRoomId, // Include roomId to save messages
       userName: user.name,     // Send the user's name so the AI can address them
+      userId: user.id,         // Send userId for learning profile tracking
     };
 
     try {
@@ -709,22 +710,6 @@ const CodeEditor: React.FC = () => {
     setCurrentButtonState(value);
     setIsLoading(isLoading);
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "submitBtnStatus", value, isLoading, roomId: user.roomId }));
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("user");
-    setAuth({
-      isAuthenticated: false,
-      user: null,
-      token: null,
-    });
-    setUser({ id: "", name: "", roomId: "" });
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.close();
-    }
-    setSocket(null);
-    navigate("/");
   };
 
   const handleEditorDidMount = (editor: any) => {
