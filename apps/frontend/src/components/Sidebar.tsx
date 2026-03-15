@@ -5,7 +5,7 @@ import { userAtom } from "../atoms/userAtom";
 import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import { themeAtom } from "../atoms/themeAtom";
 import { IP_ADDRESS } from "../Globle";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { AiOutlineDelete } from "react-icons/ai";
 
 type Room = { roomId: string; members?: string[]; ownerId?: string };
@@ -27,7 +27,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const theme = useRecoilValue(themeAtom);
   const [rooms, setRooms] = useState<Room[]>([]);
   const navigate = useNavigate();
-  const location = useLocation();
   const isDark = theme === "dark";
 
   useEffect(() => {
@@ -61,13 +60,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       return;
     }
     
-    // Open room in new tab
-    const url = location.pathname.startsWith("/code/") 
-      ? `/code/${roomId}` 
-      : `/${roomId}`;
-    
-    // Open in new tab
-    window.open(url, '_blank');
+    // Navigate to dashboard with room selected
+    navigate(`/dashboard/${roomId}`);
   };
 
   const handleDeleteRoom = async (roomId: string, e: React.MouseEvent) => {
@@ -138,40 +132,48 @@ const Sidebar: React.FC<SidebarProps> = ({
             </h2>
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {auth.isAuthenticated ? (
-                rooms.length > 0 ? (
-                  rooms.map((room) => {
-                    const isOwner = room.ownerId === auth.user?.id;
-                    return (
-                      <div
-                        key={room.roomId}
-                        className={`relative group w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200 ${isDark ? "bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700" : "bg-white border-gray-300 text-gray-800 hover:bg-blue-100 shadow-sm"} border hover:scale-[1.02] active:scale-[0.98]`}
-                      >
-                        <button
-                          onClick={(e) => handleRoomClick(room.roomId, e)}
-                          className="w-full text-left"
+                <>
+                  {rooms.length > 0 ? (
+                    rooms.map((room) => {
+                      const isOwner = room.ownerId === auth.user?.id;
+                      return (
+                        <div
+                          key={room.roomId}
+                          className={`relative group w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200 ${isDark ? "bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700" : "bg-white border-gray-300 text-gray-800 hover:bg-blue-100 shadow-sm"} border hover:scale-[1.02] active:scale-[0.98]`}
                         >
-                          <p className="font-semibold">Room {room.roomId}</p>
-                          <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-                            Members: {room.members?.length ?? 1}
-                          </p>
-                        </button>
-                        {isOwner && (
                           <button
-                            onClick={(e) => handleDeleteRoom(room.roomId, e)}
-                            className="delete-button absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-600 text-red-500 hover:text-white"
-                            title="Delete room"
+                            onClick={(e) => handleRoomClick(room.roomId, e)}
+                            className="w-full text-left"
                           >
-                            <AiOutlineDelete size={16} />
+                            <p className="font-semibold">Room {room.roomId}</p>
+                            <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                              Members: {room.members?.length ?? 1}
+                            </p>
                           </button>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-600"}`}>
-                    You are not part of any rooms yet.
-                  </p>
-                )
+                          {isOwner && (
+                            <button
+                              onClick={(e) => handleDeleteRoom(room.roomId, e)}
+                              className="delete-button absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-600 text-red-500 hover:text-white"
+                              title="Delete room"
+                            >
+                              <AiOutlineDelete size={16} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className={`text-xs mb-2 ${isDark ? "text-gray-500" : "text-gray-600"}`}>
+                      You are not part of any rooms yet.
+                    </p>
+                  )}
+                  <button
+                    onClick={() => navigate("/")}
+                    className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isDark ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"} hover:scale-[1.02] active:scale-[0.98]`}
+                  >
+                    + Create / Join Room
+                  </button>
+                </>
               ) : (
                 <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-600"}`}>
                   Sign in to see your rooms.

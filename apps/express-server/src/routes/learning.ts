@@ -25,6 +25,7 @@ import Notes from "../models/Notes";
 import User from "../models/User";
 import { authenticateToken, AuthRequest } from "../utils/auth";
 import { runCodeWithInput, normalizeOutput } from "../utils/runCode";
+import { recordTestResult } from "../utils/learningProfileService";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { normalizeForComparison } = require("../utils/outputNormalization");
 const router = Router();
@@ -108,9 +109,12 @@ for i in range(0, 6):
   await LearningModule.create({
     moduleId: "loops-beginners",
     title: "Loops for Beginners",
+    description: "Learn the basics of for and while loops through hands-on coding exercises.",
     language: "python",
     difficulty: "beginner",
     estimatedTimeMinutes: 25,
+    tags: ["basics", "control-flow", "iteration"],
+    prerequisites: [],
     checkpoints,
   } as Partial<ILearningModule>);
 }
@@ -119,7 +123,7 @@ router.get("/modules", async (_req, res) => {
   try {
     const modules = await LearningModule.find(
       {},
-      "moduleId title language difficulty estimatedTimeMinutes"
+      "moduleId title description language difficulty estimatedTimeMinutes tags prerequisites"
     ).lean();
     res.status(200).json({ modules });
   } catch (error) {
@@ -141,7 +145,7 @@ router.get("/modules/:moduleId", async (req, res) => {
 });
 
 router.post("/room/create", authenticateToken, async (req: AuthRequest, res) => {
-  const { roomId, moduleId } = req.body;
+  const { roomId, moduleId, forceSwitch } = req.body;
   if (!roomId || !moduleId) {
     return res.status(400).json({ error: "Missing roomId or moduleId" });
   }
@@ -156,13 +160,27 @@ router.post("/room/create", authenticateToken, async (req: AuthRequest, res) => 
     const ownerId = String(user._id);
 
     let room = await Room.findOne({ roomId });
+    let needsModuleUpdate = false;
     if (room) {
       const existingModuleId = room.moduleId != null ? String(room.moduleId).trim() : null;
       const requestedModuleId = String(module.moduleId).trim();
       if (room.isLearningRoom && existingModuleId && existingModuleId !== requestedModuleId) {
-        return res.status(400).json({ error: "Room is already a learning room for a different module" });
+        if (!forceSwitch) {
+          // Return error with current module info so frontend can prompt
+          const currentModule = await LearningModule.findOne({ moduleId: existingModuleId });
+          return res.status(409).json({ 
+            error: "Room is already a learning room for a different module",
+            code: "MODULE_CONFLICT",
+            currentModuleId: existingModuleId,
+            currentModuleTitle: currentModule?.title || existingModuleId
+          });
+        }
+        // forceSwitch = true: Switch to new module
+        // Delete old progress for all users in this room for the old module
+        await LearningProgress.deleteMany({ roomId, moduleId: existingModuleId });
+        needsModuleUpdate = true; // Force update to new module
       }
-      const needsModuleBinding = !room.isLearningRoom || !existingModuleId;
+      const needsModuleBinding = !room.isLearningRoom || !existingModuleId || needsModuleUpdate;
       if (needsModuleBinding) {
         room.isLearningRoom = true;
         room.moduleId = module.moduleId;
@@ -292,6 +310,15 @@ router.post("/room/:roomId/run-tests", authenticateToken, async (req: AuthReques
       }); 
     }
     const allPassed = results.every((r) => r.passed);
+    
+    // Track test results for user learning profile
+    try {
+      await recordTestResult(req.user.userId, allPassed, checkpoint.title);
+    } catch (trackError) {
+      console.error("Error tracking test result:", trackError);
+      // Don't fail the request if tracking fails
+    }
+    
     res.status(200).json({ allPassed, results });
   } catch (error) {
     console.error("Error running tests:", error);

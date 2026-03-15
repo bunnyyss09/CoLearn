@@ -14,10 +14,16 @@ import User from "./models/User";
 import Code from "./models/Code";
 import Notes from "./models/Notes";
 import AiMessage from "./models/AiMessage";
+import LearningModule from "./models/LearningModule";
 import { v4 as uuidv4 } from "uuid";
 import { generateToken, authenticateToken, AuthRequest } from "./utils/auth";
 import learningRouter, { ensureDefaultLearningModules } from "./routes/learning";
 import { seedLearningModulesFromJson } from "./utils/seedLearningModulesFromJson";
+import {
+  recordAiInteraction,
+  getUserAiContext,
+  getUserProfileData,
+} from "./utils/learningProfileService";
 
 const app = express();
 app.use(express.json());
@@ -144,6 +150,7 @@ app.post('/ai-tutor', async (req, res) => {
     output,
     roomId,
     userName,
+    userId,  // Optional: for tracking learning profile
     checkpointType,
     checkpointTitle,
     checkpointDescription,
@@ -155,6 +162,15 @@ app.post('/ai-tutor', async (req, res) => {
       return res.status(400).json({ error: "Missing required fields: userQuery, language, or code." });
   }
   try {
+      // Get user learning context if userId is provided
+      let userLearningContext = '';
+      if (userId) {
+        // Track this AI interaction for the user's learning profile
+        await recordAiInteraction(userId, userQuery, code);
+        // Get personalized context about the user's learning journey
+        userLearningContext = await getUserAiContext(userId);
+      }
+
       const aiResponseText = await getAiTutorResponse({
         userQuery,
         language,
@@ -168,6 +184,7 @@ app.post('/ai-tutor', async (req, res) => {
         aiMode,
         moduleTitle,
         moduleSummary,
+        userLearningContext,
       });
       
       // Save user message and AI response to database if roomId is provided (public room AI chat)
@@ -423,6 +440,65 @@ app.get("/room/:roomId", async (req, res) => {
   }
 });
 
+// Get detailed room info with member names and module details
+app.get("/room/:roomId/details", authenticateToken, async (req: AuthRequest, res) => {
+  const { roomId } = req.params;
+
+  try {
+    const room = await Room.findOne({ roomId });
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    // Check if user is a member
+    if (!req.user || !room.members.includes(req.user.userId)) {
+      return res.status(403).json({ error: "You are not a member of this room" });
+    }
+
+    // Get member names
+    const memberUsers = await User.find({ _id: { $in: room.members } }).select('_id name');
+    const memberNames = room.members.map(memberId => {
+      const memberUser = memberUsers.find(u => u._id === memberId);
+      return memberUser ? memberUser.name : memberId;
+    });
+
+    // Get owner name
+    const ownerUser = memberUsers.find(u => u._id === room.ownerId);
+    const ownerName = ownerUser ? ownerUser.name : room.ownerId;
+
+    // Get module info if learning room
+    let moduleName, moduleDescription, totalCheckpoints;
+    if (room.isLearningRoom && room.moduleId) {
+      const moduleInfo = await LearningModule.findOne({ moduleId: room.moduleId });
+      if (moduleInfo) {
+        moduleName = moduleInfo.title;
+        moduleDescription = `${moduleInfo.difficulty} • ${moduleInfo.estimatedTimeMinutes} min • ${moduleInfo.language}`;
+        totalCheckpoints = moduleInfo.checkpoints.length;
+      }
+    }
+
+    res.status(200).json({
+      room: {
+        roomId: room.roomId,
+        ownerId: room.ownerId,
+        ownerName,
+        members: room.members,
+        memberNames,
+        isLearningRoom: room.isLearningRoom || false,
+        moduleId: room.moduleId,
+        moduleName,
+        moduleDescription,
+        currentCheckpointIndex: room.currentCheckpointIndex || 0,
+        totalCheckpoints,
+        createdAt: room.createdAt,
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching room details:", error);
+    res.status(500).json({ error: "Failed to fetch room details" });
+  }
+});
+
 // Delete a room (only owner can delete)
 app.delete("/room/:roomId", authenticateToken, async (req: AuthRequest, res) => {
   const { roomId } = req.params;
@@ -546,6 +622,62 @@ app.put("/code/:roomId", async (req, res) => {
   } catch (error) {
     console.error("Error updating code:", error);
     res.status(500).json({ error: "Failed to update code" });
+  }
+});
+
+// Get user's learning profile
+app.get("/learning-profile/:userId", authenticateToken, async (req: AuthRequest, res) => {
+  const { userId } = req.params;
+
+  // Ensure user can only access their own profile (or we could allow admins)
+  if (!req.user || req.user.userId !== userId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  try {
+    const profileData = await getUserProfileData(userId);
+    
+    if (!profileData) {
+      return res.status(200).json({
+        message: "No learning data yet",
+        profile: {
+          weaknesses: [],
+          strengths: [],
+          metrics: {
+            totalAiQuestions: 0,
+            totalTestFailures: 0,
+            totalTestPasses: 0,
+            topTopics: [],
+          },
+          learningPace: 'unknown',
+          recentErrors: [],
+        }
+      });
+    }
+
+    res.status(200).json({ profile: profileData });
+  } catch (error) {
+    console.error("Error fetching learning profile:", error);
+    res.status(500).json({ error: "Failed to fetch learning profile" });
+  }
+});
+
+// Get learning insights/summary for a user (simpler endpoint for quick display)
+app.get("/learning-profile/:userId/summary", authenticateToken, async (req: AuthRequest, res) => {
+  const { userId } = req.params;
+
+  if (!req.user || req.user.userId !== userId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  try {
+    const summary = await getUserAiContext(userId);
+    res.status(200).json({ 
+      summary: summary || "Keep learning! Your profile will build up as you interact with the AI tutor and complete exercises."
+    });
+  } catch (error) {
+    console.error("Error fetching learning summary:", error);
+    res.status(500).json({ error: "Failed to fetch learning summary" });
   }
 });
 

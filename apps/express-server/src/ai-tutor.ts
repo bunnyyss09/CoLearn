@@ -20,6 +20,8 @@ export interface AiTutorData {
     moduleTitle?: string;
     /** Learning module summary (e.g. checkpoint list or short overview) for context */
     moduleSummary?: string;
+    /** User learning profile context - weaknesses, frequent topics, pace */
+    userLearningContext?: string;
 }
 
 // System prompt to guide the AI's behavior
@@ -28,7 +30,13 @@ Analyze the user's code, their provided input, and the resulting output.
 Provide hints, ask leading questions, and explain concepts.
 Do not write the correct code for them unless they are completely stuck and explicitly ask for the solution.
 Keep your responses concise and encouraging.
-When a user's name is provided, address them by name so they know you're replying to them. In a shared room, multiple learners may ask; always say who you're addressing (e.g. "Hi Sarah, ...") when multiple people are in the conversation.`;
+When a user's name is provided, address them by name so they know you're replying to them. In a shared room, multiple learners may ask; always say who you're addressing (e.g. "Hi Sarah, ...") when multiple people are in the conversation.
+
+IMPORTANT: If learner context is provided (their weaknesses, frequently asked topics, or learning pace), use it to:
+- Give extra attention and clearer explanations for their known weak areas
+- Be more patient and provide more step-by-step guidance if they have a slow learning pace
+- Recognize patterns in their mistakes and proactively address common issues
+- Offer encouragement when they struggle with areas they've had trouble with before`;
 
 function modeInstructions(aiMode?: string): string {
     switch (aiMode) {
@@ -66,9 +74,18 @@ ${data.checkpointDescription || "No detailed description provided."}
 `
         : "";
 
+    const learnerContext = data.userLearningContext
+        ? `
+--- LEARNER PROFILE (use this to personalize your help) ---
+${data.userLearningContext}
+-----------------------------------------------------------
+`
+        : "";
+
     return `${baseSystemPrompt}
 
 ${modeInstructions(data.aiMode)}
+${learnerContext}
 ${moduleContext}
 ${checkpointContext}
 

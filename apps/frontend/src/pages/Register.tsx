@@ -47,6 +47,8 @@ const Register = () => {
         setIsSidebarOpen(true);
     }, []);
 
+    // Note: Removed auto-redirect to dashboard to allow creating new rooms from "/"
+
     useEffect(() => {
         document.title = "CoLearn - Collaborative Coding";
         // Pre-fill room ID from the URL parameter
@@ -131,6 +133,10 @@ const Register = () => {
             token: token,
         });
         setShowAuthModal(false);
+        // Redirect to dashboard after login if not joining a specific room
+        if (!params.roomId) {
+            navigate('/dashboard');
+        }
     };
 
     // This is your original, working socket logic
@@ -144,7 +150,7 @@ const Register = () => {
         }
 
         if (isJoining && (roomId.trim() === "" || roomId.length !== 8)) {
-            setError("Please enter a valid 6-digit Room ID to join.");
+            setError("Please enter a valid 8-digit Room ID to join.");
             return;
         }
 
@@ -335,7 +341,7 @@ const Register = () => {
                         <div className="space-y-6">
                             <div>
                                 <label htmlFor="roomId" className={`block text-sm font-medium ${isDark ? "text-gray-400" : "text-gray-700"} mb-2`}>Room ID (for joining)</label>
-                                <input type="text" id="roomId" placeholder="Enter 6-digit Room ID" value={roomId} onChange={(e) => setRoomId(e.target.value)} className={`w-full p-3 ${isDark ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300 hover:border-blue-400"} rounded-lg border focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200`} />
+                                <input type="text" id="roomId" placeholder="Enter 8-digit Room ID" value={roomId} onChange={(e) => setRoomId(e.target.value)} className={`w-full p-3 ${isDark ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300 hover:border-blue-400"} rounded-lg border focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200`} />
                             </div>
                             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
                             <div className="flex flex-col space-y-4 pt-2">

@@ -4,6 +4,7 @@ import Register from "./pages/Register";
 import CodeEditor from "./pages/CodeEditor";
 import LearningRoom from "./pages/LearningRoom";
 import ChooseModule from "./pages/ChooseModule";
+import Dashboard from "./pages/Dashboard";
 import ProtectedRouter from "./middleWare/ProtectedRouter";
 
 const App = () => {
@@ -12,9 +13,23 @@ const App = () => {
     <RecoilRoot>
       <Router>
         <Routes>
-          {/* The landing/register page will handle both root and room-specific URLs */}
-          <Route path="/:roomId" element={<Register />} />
-          <Route path="/" element={<Register />} />
+          {/* Dashboard - shows user profile or room details */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRouter>
+                <Dashboard />
+              </ProtectedRouter>
+            }
+          />
+          <Route
+            path="/dashboard/:roomId"
+            element={
+              <ProtectedRouter>
+                <Dashboard />
+              </ProtectedRouter>
+            }
+          />
 
           {/* The protected route for your existing code editor component */}
           <Route 
@@ -41,6 +56,10 @@ const App = () => {
               </ProtectedRouter>
             }
           />
+
+          {/* Catch-all for room IDs - must be AFTER specific routes */}
+          <Route path="/:roomId" element={<Register />} />
+          <Route path="/" element={<Register />} />
         </Routes>
       </Router>
     </RecoilRoot>

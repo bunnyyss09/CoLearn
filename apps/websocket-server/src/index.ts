@@ -1,10 +1,21 @@
 import http from "http";
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 import { createClient } from "redis";
 
 const server = http.createServer();
 const wss = new WebSocketServer({ server });
 const pubSubClient = createClient();
+
+// Heartbeat interval (30 seconds)
+const HEARTBEAT_INTERVAL = 30000;
+// Heartbeat timeout (10 seconds to respond)
+const HEARTBEAT_TIMEOUT = 10000;
+
+// Extended WebSocket type with heartbeat tracking
+interface ExtendedWebSocket extends WebSocket {
+  isAlive?: boolean;
+  heartbeatTimeout?: NodeJS.Timeout;
+}
 
 // Storage for rooms and their users / metadata
 // Shape:
@@ -32,7 +43,32 @@ async function process() {
     console.log("Redis PubSub Client Error", err)
   );
 
+  // Heartbeat interval to detect dead connections
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((client) => {
+      const extWs = client as ExtendedWebSocket;
+      if (extWs.isAlive === false) {
+        console.log("Terminating dead connection");
+        return extWs.terminate();
+      }
+      extWs.isAlive = false;
+      extWs.ping();
+    });
+  }, HEARTBEAT_INTERVAL);
+
+  wss.on("close", () => {
+    clearInterval(heartbeatInterval);
+  });
+
   wss.on("connection", (ws, req) => {
+    const extWs = ws as ExtendedWebSocket;
+    extWs.isAlive = true;
+    
+    // Handle pong responses
+    extWs.on("pong", () => {
+      extWs.isAlive = true;
+    });
+    
     console.log("Connection established");
 
     const queryParams = new URLSearchParams(req.url?.split("?")[1]);

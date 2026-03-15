@@ -53,19 +53,22 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
           if (data.type === "chat" && data.chatMessage) {
             setMessages((prev) => [...prev, data.chatMessage]);
             
-            // Also save to backend
-            fetch(`http://${IP_ADDRESS}:3000/chat/send`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chatId,
-                userId: data.chatMessage.userId,
-                userName: data.chatMessage.userName,
-                message: data.chatMessage.message,
-              }),
-            }).catch((error) => {
-              console.error("Error saving chat message:", error);
-            });
+            // Only save to backend if this is the sender's message
+            // This prevents duplicate saves when multiple clients receive the broadcast
+            if (data.chatMessage.userId === userId) {
+              fetch(`http://${IP_ADDRESS}:3000/chat/send`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chatId,
+                  userId: data.chatMessage.userId,
+                  userName: data.chatMessage.userName,
+                  message: data.chatMessage.message,
+                }),
+              }).catch((error) => {
+                console.error("Error saving chat message:", error);
+              });
+            }
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);
@@ -78,7 +81,7 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
         socket.removeEventListener("message", handleMessage);
       };
     }
-  }, [socket, chatId, IP_ADDRESS]);
+  }, [socket, chatId, IP_ADDRESS, userId]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

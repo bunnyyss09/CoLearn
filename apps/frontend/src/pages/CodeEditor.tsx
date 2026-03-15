@@ -18,6 +18,9 @@ import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+// Debounce delay for code sync (ms) - prevents flooding WebSocket on fast typing
+const CODE_SYNC_DEBOUNCE_MS = 150;
+
 // AI Message type
 type AiMessage = {
   sender: 'user' | 'ai';
@@ -41,7 +44,7 @@ const CodeEditor: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false); // Loading state for code submission
   const [currentButtonState, setCurrentButtonState] = useState("Run Code");
   const [user, setUser] = useRecoilState(userAtom);
-  const [auth, setAuth] = useRecoilState(authAtom);
+  const auth = useRecoilValue(authAtom);
   const navigate = useNavigate();
   const [isCopied, setIsCopied] = useState(false);
   const theme = useRecoilValue(themeAtom);
@@ -60,6 +63,19 @@ const CodeEditor: React.FC = () => {
   const [ioPanelHeight, setIoPanelHeight] = useState(200);
   const ioDragInfoRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
+  // Refs to prevent stale closures in WebSocket handlers
+  const codeRef = useRef(code);
+  const languageRef = useRef(language);
+  const currentButtonStateRef = useRef(currentButtonState);
+  const isLoadingRef = useRef(isLoading);
+  const ioSessionsRef = useRef(ioSessions);
+  const activeIoSessionIdRef = useRef(activeIoSessionId);
+  
+  // Debounce timer ref for code sync
+  const codeSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Flag to prevent echo: when we receive code from server, don't re-send it
+  const isRemoteUpdateRef = useRef(false);
+
 
   // AI Assistant State
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
@@ -76,11 +92,28 @@ const CodeEditor: React.FC = () => {
   const [chatId, setChatId] = useState<string>("");
 
   // Learning room metadata (if this room has been upgraded to a module)
-  const [isLearningRoom, setIsLearningRoom] = useState<boolean>(false);
-  const [learningModuleId, setLearningModuleId] = useState<string | null>(null);
+  const [_isLearningRoom, setIsLearningRoom] = useState<boolean>(false);
+  const [_learningModuleId, setLearningModuleId] = useState<string | null>(null);
 
   // Sidebar panel state
   const [activePanel, setActivePanel] = useState<"ai" | "chat" | "info" | null>("ai");
+
+  // Keep refs in sync with state to avoid stale closures in callbacks
+  useEffect(() => { codeRef.current = code; }, [code]);
+  useEffect(() => { languageRef.current = language; }, [language]);
+  useEffect(() => { currentButtonStateRef.current = currentButtonState; }, [currentButtonState]);
+  useEffect(() => { isLoadingRef.current = isLoading; }, [isLoading]);
+  useEffect(() => { ioSessionsRef.current = ioSessions; }, [ioSessions]);
+  useEffect(() => { activeIoSessionIdRef.current = activeIoSessionId; }, [activeIoSessionId]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (codeSyncTimeoutRef.current) {
+        clearTimeout(codeSyncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Sidebar closed by default on non-landing pages
   useEffect(() => {
@@ -206,7 +239,7 @@ const CodeEditor: React.FC = () => {
     // If we have a socket but user.roomId doesn't match params.roomId, we need to reconnect
     if (socket && params.roomId && user.roomId !== params.roomId) {
       // Close existing socket and redirect to join the new room
-      if (socket.readyState === WebSocket.OPEN) {
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
         socket.close();
       }
       setSocket(null);
@@ -227,7 +260,8 @@ const CodeEditor: React.FC = () => {
     }
     
     return () => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
+      // Clean up socket on unmount - handle both OPEN and CONNECTING states
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
         socket.close();
       }
     };
@@ -239,7 +273,13 @@ const CodeEditor: React.FC = () => {
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === "users") setConnectedUsers(data.users);
-        if (data.type === "code") setCode(data.code);
+        if (data.type === "code") {
+          // Set flag to prevent echo when we receive remote code
+          isRemoteUpdateRef.current = true;
+          setCode(data.code);
+          // Clear the flag after a short delay to allow state to settle
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 50);
+        }
         if (data.type === "language") setLanguage(data.language);
         if (data.type === "submitBtnStatus") {
           setCurrentButtonState(data.value);
@@ -257,25 +297,28 @@ const CodeEditor: React.FC = () => {
         }
 
         if (data.type === "requestForAllData" && socket.readyState === WebSocket.OPEN) {
+          // Use refs to get current values (avoids stale closure)
           socket.send(JSON.stringify({
             type: "allData",
-            code,
-            language,
-            currentButtonState,
-            isLoading,
-            ioSessions,
-            activeIoSessionId,
+            code: codeRef.current,
+            language: languageRef.current,
+            currentButtonState: currentButtonStateRef.current,
+            isLoading: isLoadingRef.current,
+            ioSessions: ioSessionsRef.current,
+            activeIoSessionId: activeIoSessionIdRef.current,
             userId: data.userId
           }));
         }
 
         if (data.type === "allData") {
+          isRemoteUpdateRef.current = true;
           setCode(data.code);
           setLanguage(data.language);
           setCurrentButtonState(data.currentButtonState);
           setIsLoading(data.isLoading);
           setIoSessions(data.ioSessions || [{ id: 1, input: "", output: [] }]); // fallback for older clients
           setActiveIoSessionId(data.activeIoSessionId || 1);
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 50);
         }
 
         // Shared AI assistant messages: whenever any user in the room
@@ -295,7 +338,7 @@ const CodeEditor: React.FC = () => {
         }
       };
     }
-  }, [code, language, currentButtonState, isLoading, socket, connectedUsers, ioSessions, activeIoSessionId, user.roomId, params.roomId, navigate]);
+  }, [socket, user.roomId, params.roomId, navigate, setConnectedUsers]);
 
   useEffect(() => {
     aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -529,7 +572,7 @@ const CodeEditor: React.FC = () => {
       return (
         <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
           <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiUsers /> Members & Room
+            <FiUsers /> Room
           </h2>
           <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
             <div>
@@ -603,6 +646,7 @@ const CodeEditor: React.FC = () => {
       output: activeSession.output.join('\n'), // Send joined output
       roomId: effectiveRoomId, // Include roomId to save messages
       userName: user.name,     // Send the user's name so the AI can address them
+      userId: user.id,         // Send userId for learning profile tracking
     };
 
     try {
@@ -668,28 +712,28 @@ const CodeEditor: React.FC = () => {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "submitBtnStatus", value, isLoading, roomId: user.roomId }));
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("user");
-    setAuth({
-      isAuthenticated: false,
-      user: null,
-      token: null,
-    });
-    setUser({ id: "", name: "", roomId: "" });
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.close();
-    }
-    setSocket(null);
-    navigate("/");
-  };
-
   const handleEditorDidMount = (editor: any) => {
     editor.onDidChangeModelContent(() => {
       const currentCode = editor.getValue();
-      if (currentCode !== code && socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "code", code: currentCode, roomId: user.roomId }));
+      
+      // Update local state immediately for responsive UI
+      setCode(currentCode);
+      
+      // Skip sending if this is a remote update (received from another user)
+      if (isRemoteUpdateRef.current) {
+        return;
       }
+      
+      // Debounce the WebSocket send to prevent flooding
+      if (codeSyncTimeoutRef.current) {
+        clearTimeout(codeSyncTimeoutRef.current);
+      }
+      
+      codeSyncTimeoutRef.current = setTimeout(() => {
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "code", code: currentCode, roomId: user.roomId }));
+        }
+      }, CODE_SYNC_DEBOUNCE_MS);
     });
   };
 
@@ -803,21 +847,18 @@ const CodeEditor: React.FC = () => {
               onClick={() => handlePanelToggle("info")}
               className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'info' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
             >
-              <FiUsers /> Members & Room
+              <FiUsers /> Room
             </button>
-            {/* Learning section: Learn button that opens the guided module */}
-            <div className="flex flex-col ml-2">
-              <button
-                onClick={() => {
-                  const effectiveRoomId = user.roomId || params.roomId;
-                  if (!effectiveRoomId) return;
-                  navigate(`/learn/${effectiveRoomId}/choose`);
-                }}
-                className={`mt-1 px-3 py-1.5 rounded-md text-xs font-medium ${isDark ? "bg-blue-700 text-white hover:bg-blue-600" : "bg-blue-600 text-white hover:bg-blue-700"} transition-all`}
-              >
-                Learn
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                const effectiveRoomId = user.roomId || params.roomId;
+                if (!effectiveRoomId) return;
+                navigate(`/learn/${effectiveRoomId}/choose`);
+              }}
+              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${isDark ? 'bg-blue-700 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700'} hover:scale-105 active:scale-95`}
+            >
+              <FiBox /> Modules
+            </button>
           </div>
           <div className="flex items-center gap-3">
             <select
@@ -857,7 +898,6 @@ const CodeEditor: React.FC = () => {
                 language={language}
                 theme={isDark ? "vs-dark" : "vs"}
                 onMount={handleEditorDidMount}
-                onChange={(value) => setCode(value)}
                 options={{ minimap: { enabled: false }, fontSize: 14 }}
               />
             </div>
