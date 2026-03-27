@@ -107,8 +107,16 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
   };
 
   return (
-    <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200"} border-2 rounded-lg shadow-2xl flex flex-col h-full min-h-0 overflow-hidden`}>
-      <h2 className={`text-xl font-bold p-4 border-b ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>Chat</h2>
+    <div
+      className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border backdrop-blur-md ${
+        isDark ? "border-white/10 bg-zinc-900/80 shadow-panel-dark" : "border-slate-200/90 bg-white/90 shadow-panel"
+      }`}
+    >
+      <h2
+        className={`border-b p-3 text-sm font-bold uppercase tracking-wider ${isDark ? "border-white/10 text-zinc-400" : "border-slate-200 bg-slate-50/80 text-slate-500"}`}
+      >
+        Messages
+      </h2>
       <div className="flex-1 min-h-0 p-4 overflow-y-auto overscroll-contain space-y-3 scroll-smooth">
         {messages.length > 0 ? (
           messages.map((msg, index) => (
@@ -118,9 +126,11 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
                 msg.userId === userId ? "flex-row-reverse" : "flex-row"
               }`}
             >
-              <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
-                msg.userId === userId ? "bg-blue-500" : "bg-green-500"
-              }`}>
+              <div
+                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white shadow-md ${
+                  msg.userId === userId ? "bg-gradient-to-br from-violet-500 to-fuchsia-600" : "bg-gradient-to-br from-emerald-500 to-cyan-600"
+                }`}
+              >
                 {msg.userName.charAt(0).toUpperCase()}
               </div>
               <div className="flex flex-col max-w-xs md:max-w-md lg:max-w-sm">
@@ -130,10 +140,12 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
                   </p>
                 )}
                 <div
-                  className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
+                  className={`rounded-2xl border px-4 py-2.5 shadow-sm transition-all duration-300 ${
                     msg.userId === userId
-                      ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
-                      : isDark ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700" : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                      ? "rounded-tr-sm border-transparent bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-violet-500/20"
+                      : isDark
+                        ? "rounded-tl-sm border-white/10 bg-white/5 text-zinc-200"
+                        : "rounded-tl-sm border-slate-200 bg-white text-slate-800 shadow-sm"
                   }`}
                 >
                   <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
@@ -157,18 +169,23 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
         )}
         <div ref={chatEndRef} />
       </div>
-      <form onSubmit={handleSendMessage} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+      <form
+        onSubmit={handleSendMessage}
+        className={`flex gap-2 border-t p-3 ${isDark ? "border-white/10 bg-white/[0.02]" : "border-slate-200 bg-slate-50/50"}`}
+      >
         <input
           type="text"
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
           placeholder="Type a message..."
-          className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+          className={`w-full rounded-xl border p-2.5 text-sm transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${
+            isDark ? "border-white/10 bg-white/5 text-white placeholder-zinc-500" : "border-slate-200 bg-white text-slate-900 placeholder-slate-400"
+          }`}
           disabled={!socket || socket.readyState !== WebSocket.OPEN}
         />
         <button
           type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+          className="rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 p-2.5 text-white shadow-lg shadow-violet-500/25 transition-all duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
           disabled={
             !inputMessage.trim() ||
             !socket ||

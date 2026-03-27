@@ -17,6 +17,7 @@ import { themeAtom } from "../atoms/themeAtom";
 import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { lumenWorkspace } from "../workspace/lumenTheme";
 
 // Debounce delay for code sync (ms) - prevents flooding WebSocket on fast typing
 const CODE_SYNC_DEBOUNCE_MS = 150;
@@ -49,6 +50,7 @@ const CodeEditor: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const theme = useRecoilValue(themeAtom);
   const isDark = theme === "dark";
+  const lm = lumenWorkspace(isDark);
   const [isSidebarOpen, setIsSidebarOpen] = useRecoilState(sidebarOpenAtom);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -408,48 +410,45 @@ const CodeEditor: React.FC = () => {
   };
 
   const renderIoPanelRight = () => (
-    <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200"} border-2 rounded-lg shadow-2xl flex flex-col h-full transition-all duration-200`}>
-      <h2 className={`text-xl font-bold p-3 border-b ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-        Test Cases (Input / Output)
-      </h2>
-      <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col">
-            <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Input</p>
-            <textarea
-              value={activeSession.input}
-              onChange={handleInputChange}
-              placeholder="Enter input..."
-              className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs h-32 transition`}
-            />
+    <div className={`flex h-full min-h-0 flex-col border-lumen-line ${lm.rail}`}>
+      <div className="border-b border-lumen-line px-3 py-2 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-lumen-signal">
+        I/O console
+      </div>
+      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
+        <div>
+          <p className={`mb-1 text-[10px] font-semibold uppercase tracking-wider ${lm.muted}`}>stdin</p>
+          <textarea
+            value={activeSession.input}
+            onChange={handleInputChange}
+            placeholder="stdin…"
+            className={`h-28 w-full resize-none rounded-md border p-2 text-xs ${lm.input}`}
+          />
+        </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <p className={`text-[10px] font-semibold uppercase tracking-wider ${lm.muted}`}>stdout / stderr</p>
+            <button
+              type="button"
+              onClick={() =>
+                setIoSessions((prev) =>
+                  prev.map((s) => (s.id === activeIoSessionId ? { ...s, output: [] } : s))
+                )
+              }
+              className="text-[10px] font-bold uppercase tracking-wider text-lumen-heat hover:text-lumen-heatGlow"
+            >
+              Clear
+            </button>
           </div>
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-1">
-              <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>Output</p>
-              <button
-                onClick={() =>
-                  setIoSessions((prev) =>
-                    prev.map((s) =>
-                      s.id === activeIoSessionId ? { ...s, output: [] } : s
-                    )
-                  )
-                }
-                className="text-red-500 hover:text-red-400 text-xs"
-              >
-                Clear
-              </button>
-            </div>
-            <div className={`${isDark ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-300"} border text-green-600 p-2 rounded-md overflow-y-auto font-mono text-xs min-h-[6rem] transition`}>
-              {activeSession.output.length > 0 ? (
-                activeSession.output.map((line, index) => (
-                  <pre key={index} className="whitespace-pre-wrap">
-                    {line}
-                  </pre>
-                ))
-              ) : (
-                <p className={isDark ? "text-gray-500" : "text-gray-600"}>No output yet.</p>
-              )}
-            </div>
+          <div className={`min-h-[7rem] rounded-md border border-lumen-line p-2 text-xs ${lm.console}`}>
+            {activeSession.output.length > 0 ? (
+              activeSession.output.map((line, index) => (
+                <pre key={index} className="whitespace-pre-wrap">
+                  {line}
+                </pre>
+              ))
+            ) : (
+              <span className="text-zinc-600">— waiting for run —</span>
+            )}
           </div>
         </div>
       </div>
@@ -463,16 +462,31 @@ const CodeEditor: React.FC = () => {
 
     if (activePanel === "ai") {
       return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full overflow-hidden transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiBox /> AI Assistant
-          </h2>
-          <div className="flex-grow p-4 overflow-y-auto space-y-4">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-lumen-line px-3 py-2 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-lumen-signal">
+            <FiBox className="h-3.5 w-3.5" />
+            Neural tutor
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             {aiMessages.length > 0 ? (
               aiMessages.map((msg, index) => (
-                <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-                  {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>}
-                  <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-blue-500 text-white rounded-tr-sm border border-blue-600') : (isDark ? 'bg-gray-800' : 'bg-white border border-gray-300')} ${msg.sender === 'user' ? (isDark ? 'text-white' : 'text-white') : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
+                <div key={index} className={`flex items-start gap-2 ${msg.sender === "user" ? "justify-end" : ""}`}>
+                  {msg.sender === "ai" && (
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-cyan-500/40 bg-cyan-500/10 font-display text-[10px] font-bold text-cyan-400">
+                      AI
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[92%] rounded-lg border px-3 py-2 text-xs leading-relaxed md:max-w-md ${
+                      msg.sender === "user"
+                        ? isDark
+                          ? "border-lumen-heat/40 bg-lumen-heat/15 text-zinc-100"
+                          : "border-rose-200 bg-rose-50 text-zinc-900"
+                        : isDark
+                          ? "border-lumen-line bg-lumen-ink text-zinc-300"
+                          : "border-lumen-line bg-white text-zinc-800"
+                    }`}
+                  >
                     {msg.sender === 'ai' ? (
                       <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
                         <ReactMarkdown
@@ -501,42 +515,52 @@ const CodeEditor: React.FC = () => {
                             h3: ({ children }: any) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
                             strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
                             em: ({ children }: any) => <em className="italic">{children}</em>,
-                            blockquote: ({ children }: any) => <blockquote className={`border-l-4 ${isDark ? "border-gray-600" : "border-gray-400"} pl-3 italic my-2`}>{children}</blockquote>,
+                            blockquote: ({ children }: any) => (
+                              <blockquote className={`my-2 border-l-2 pl-3 italic ${isDark ? "border-zinc-600 text-zinc-400" : "border-zinc-300 text-zinc-600"}`}>{children}</blockquote>
+                            ),
                           }}
                         >
                           {msg.text}
                         </ReactMarkdown>
                       </div>
                     ) : (
-                      <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                      <p className="whitespace-pre-wrap">{msg.text}</p>
                     )}
                   </div>
                 </div>
               ))
             ) : (
-              <p className={`text-center mt-4 ${isDark ? "text-gray-500" : "text-gray-600"}`}>Ask the AI for a hint or to explain a concept!</p>
+              <p className={`py-6 text-center text-xs ${lm.muted}`}>
+                Ask about your code — context from the editor is sent automatically.
+              </p>
             )}
             {isAiLoading && (
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>
-                <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-                  <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
+              <div className="flex items-start gap-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-cyan-500/40 bg-cyan-500/10 font-display text-[10px] font-bold text-cyan-400">
+                  AI
+                </div>
+                <div className={`rounded-lg border border-lumen-line px-3 py-2 ${isDark ? "bg-lumen-ink" : "bg-zinc-50"}`}>
+                  <AiOutlineLoading3Quarters className={`h-4 w-4 animate-spin ${lm.muted}`} />
                 </div>
               </div>
             )}
             <div ref={aiChatEndRef} />
           </div>
-          <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+          <form onSubmit={handleAiSubmit} className={`flex gap-2 border-t border-lumen-line p-2 ${isDark ? "bg-lumen-void" : "bg-lumen-canvas"}`}>
             <input
               type="text"
               value={aiInput}
               onChange={(e) => setAiInput(e.target.value)}
-              placeholder="Chat with the AI..."
-              className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+              placeholder="Prompt…"
+              className={`min-w-0 flex-1 rounded-md border p-2 text-xs ${lm.input}`}
               disabled={isAiLoading}
             />
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
-              <AiOutlineSend size={20} />
+            <button
+              type="submit"
+              className={`rounded-md px-3 py-2 transition disabled:opacity-40 ${lm.run}`}
+              disabled={isAiLoading || !aiInput.trim()}
+            >
+              <AiOutlineSend className="h-4 w-4" />
             </button>
           </form>
         </div>
@@ -545,22 +569,17 @@ const CodeEditor: React.FC = () => {
 
     if (activePanel === "chat") {
       return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiMessageCircle /> Room Chat
-          </h2>
-          <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex items-center gap-2 border-b border-lumen-line px-3 py-2 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-lumen-signal">
+            <FiMessageCircle className="h-3.5 w-3.5" />
+            Squad channel
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
             {chatId ? (
-              <Chat
-                socket={socket}
-                chatId={chatId}
-                userId={user.id}
-                userName={user.name}
-                IP_ADDRESS={IP_ADDRESS}
-              />
+              <Chat socket={socket} chatId={chatId} userId={user.id} userName={user.name} IP_ADDRESS={IP_ADDRESS} />
             ) : (
-              <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
-                Chat is unavailable until the room is fully initialized.
+              <div className={`flex flex-1 items-center justify-center p-4 text-center text-xs ${lm.muted}`}>
+                Initializing channel…
               </div>
             )}
           </div>
@@ -570,41 +589,45 @@ const CodeEditor: React.FC = () => {
 
     if (activePanel === "info") {
       return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiUsers /> Room
-          </h2>
-          <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+        <div className="flex h-full min-h-0 flex-col overflow-y-auto">
+          <div className="flex items-center gap-2 border-b border-lumen-line px-3 py-2 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-lumen-signal">
+            <FiUsers className="h-3.5 w-3.5" />
+            Session
+          </div>
+          <div className="flex flex-col gap-4 p-3">
             <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiUsers /> Members
+              <h3 className={`mb-2 flex items-center gap-2 font-display text-[10px] font-bold uppercase tracking-wider ${lm.muted}`}>
+                <FiUsers /> Peers
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {connectedUsers.length > 0 ? (
                   connectedUsers.map((u: any) => (
-                    <div key={u.id} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
-                      <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                    <div key={u.id} className={`flex items-center gap-3 rounded-md border p-2 ${lm.inset}`}>
+                      <div className="flex h-9 w-9 items-center justify-center rounded border border-lumen-signal/30 bg-lumen-signal/10 font-display text-sm font-bold text-lumen-signal">
                         {u.name.charAt(0).toUpperCase()}
                       </div>
-                      <div>
-                        <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
-                        <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
+                      <div className="min-w-0">
+                        <p className={`truncate text-xs font-semibold ${lm.hi}`}>{u.name}</p>
+                        <p className={`truncate font-mono text-[10px] ${lm.muted}`}>{u.id}</p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
+                  <p className={`text-center text-xs ${lm.muted}`}>Solo in room.</p>
                 )}
               </div>
             </div>
             <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiHash /> Invite Code
+              <h3 className={`mb-2 flex items-center gap-2 font-display text-[10px] font-bold uppercase tracking-wider ${lm.muted}`}>
+                <FiHash /> Room id
               </h3>
-              <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
-              <div className="flex items-center gap-2">
-                <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{user.roomId || '...'}</p>
-                <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
+              <div className="flex items-stretch gap-2">
+                <p className={`flex-1 select-all rounded-md border border-lumen-line bg-lumen-void p-2 font-mono text-xs text-lumen-ok`}>{user.roomId || "…"}</p>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className={`rounded-md border border-lumen-line px-3 transition hover:border-lumen-signal/50 ${isDark ? "bg-lumen-lift text-zinc-200" : "bg-zinc-100 text-zinc-800"}`}
+                >
                   {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
                 </button>
               </div>
@@ -744,65 +767,61 @@ const CodeEditor: React.FC = () => {
 
     return (
       <div
-        className={`mt-3 ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200"} border-2 rounded-lg shadow-2xl flex flex-col transition-all duration-200`}
-        style={{ height: isIoCollapsed ? 40 : ioPanelHeight }}
+        className={`mt-0 flex flex-shrink-0 flex-col border-t border-lumen-line ${lm.bar}`}
+        style={{ height: isIoCollapsed ? 36 : ioPanelHeight }}
       >
         <div
-          className={`flex items-center justify-between px-4 py-2 border-b cursor-row-resize select-none ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-100/50"}`}
+          className={`flex cursor-row-resize select-none items-center justify-between border-b border-lumen-line px-3 py-1.5 ${isDark ? "bg-lumen-void" : "bg-lumen-canvas"}`}
           onMouseDown={startIoResizeDrag}
         >
           <div className="flex items-center gap-2">
-            <h3 className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>Test Cases (Input / Output)</h3>
-            <span className={`text-[10px] uppercase tracking-wider ${isDark ? "text-gray-500" : "text-gray-600"}`}>
-              Drag to resize
-            </span>
+            <span className="font-display text-[10px] font-bold uppercase tracking-[0.2em] text-lumen-signal">Dock</span>
+            <span className={`text-[10px] ${lm.muted}`}>drag edge · stdin / stdout</span>
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() =>
                 setIoSessions((prev) =>
-                  prev.map((s) =>
-                    s.id === activeIoSessionId ? { ...s, output: [] } : s
-                  )
+                  prev.map((s) => (s.id === activeIoSessionId ? { ...s, output: [] } : s))
                 )
               }
-              className="text-red-500 hover:text-red-400 text-xs"
+              className="text-[10px] font-bold uppercase tracking-wider text-lumen-heat hover:underline"
             >
-              Clear
+              Clear out
             </button>
             <button
+              type="button"
               onClick={() => setIsIoCollapsed((v) => !v)}
-              className={`text-xs px-2 py-1 rounded-md border transition ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700" : "bg-white hover:bg-blue-50 text-gray-800 border-gray-300"}`}
+              className={`rounded border border-lumen-line px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${lm.inset}`}
             >
-              {isIoCollapsed ? "Show" : "Hide"}
+              {isIoCollapsed ? "Expand" : "Collapse"}
             </button>
           </div>
         </div>
         {!isIoCollapsed && (
-          <div className="flex-1 p-3 flex flex-col gap-3 overflow-hidden">
-            <div className="flex gap-3 h-full">
-              <div className="w-1/2 flex flex-col h-full">
-                <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Input</p>
-                <textarea
-                  value={activeSession.input}
-                  onChange={handleInputChange}
-                  placeholder="Enter input..."
-                  className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs flex-1 resize-none transition`}
-                />
-              </div>
-              <div className="w-1/2 flex flex-col h-full">
-                <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Output</p>
-                <div className={`${isDark ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-300"} border text-green-600 p-2 rounded-md overflow-y-auto font-mono text-xs flex-1 transition`}>
-                  {activeSession.output.length > 0 ? (
-                    activeSession.output.map((line, index) => (
-                      <pre key={index} className="whitespace-pre-wrap">
-                        {line}
-                      </pre>
-                    ))
-                  ) : (
-                    <p className={isDark ? "text-gray-500" : "text-gray-600"}>No output yet.</p>
-                  )}
-                </div>
+          <div className="flex min-h-0 flex-1 gap-2 overflow-hidden p-2">
+            <div className="flex min-h-0 w-1/2 flex-col">
+              <p className={`mb-0.5 text-[10px] font-semibold uppercase tracking-wider ${lm.muted}`}>stdin</p>
+              <textarea
+                value={activeSession.input}
+                onChange={handleInputChange}
+                placeholder="stdin…"
+                className={`min-h-0 flex-1 resize-none rounded-md border p-2 text-xs ${lm.input}`}
+              />
+            </div>
+            <div className="flex min-h-0 w-1/2 flex-col">
+              <p className={`mb-0.5 text-[10px] font-semibold uppercase tracking-wider ${lm.muted}`}>out</p>
+              <div className={`min-h-0 flex-1 overflow-y-auto rounded-md border border-lumen-line p-2 text-xs ${lm.console}`}>
+                {activeSession.output.length > 0 ? (
+                  activeSession.output.map((line, index) => (
+                    <pre key={index} className="whitespace-pre-wrap">
+                      {line}
+                    </pre>
+                  ))
+                ) : (
+                  <span className="text-zinc-600">—</span>
+                )}
               </div>
             </div>
           </div>
@@ -811,60 +830,56 @@ const CodeEditor: React.FC = () => {
     );
   };
 
+  const tabBtn = (id: "ai" | "chat" | "info", label: string, Icon: typeof FiBox) => (
+    <button
+      type="button"
+      onClick={() => handlePanelToggle(id)}
+      className={`flex items-center gap-2 border-b-2 px-3 py-2 font-display text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
+        activePanel === id ? lm.tabActive : lm.tabIdle
+      }`}
+    >
+      <Icon className="h-3 w-3" />
+      {label}
+    </button>
+  );
+
   return (
-    <div className={`h-screen font-sans transition-colors duration-200 ${isDark ? "bg-black text-gray-300" : "bg-gradient-to-br from-gray-50 to-blue-50 text-gray-900"} flex h-screen overflow-hidden`}>
-      <Sidebar
-        showRooms
-        onOpenAccount={() => setIsAccountOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-      />
-      <div className={`flex flex-col h-full flex-1 w-full gap-4 p-4 overflow-hidden`}> 
-        <nav className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50/80 backdrop-blur-sm border-blue-200 shadow-lg"} border rounded-xl px-4 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between transition-all duration-200`}>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen((v) => !v)}
-              className={`hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md border ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700" : "bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300"}`}
-            >
-              {isSidebarOpen ? <FiChevronsLeft size={18} /> : <FiChevronsRight size={18} />}
-            </button>
-            <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>CoLearn Live</span>
-            <span className={`text-xs px-2 py-1 rounded-full ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}>Room {user.roomId || "..."}</span>
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <button
-              onClick={() => handlePanelToggle("ai")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
-            >
-              <FiBox /> AI Tutor
-            </button>
-            <button
-              onClick={() => handlePanelToggle("chat")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
-            >
-              <FiMessageCircle /> Chat
-            </button>
-            <button
-              onClick={() => handlePanelToggle("info")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'info' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
-            >
-              <FiUsers /> Room
-            </button>
-            <button
-              onClick={() => {
-                const effectiveRoomId = user.roomId || params.roomId;
-                if (!effectiveRoomId) return;
-                navigate(`/learn/${effectiveRoomId}/choose`);
-              }}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${isDark ? 'bg-blue-700 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700'} hover:scale-105 active:scale-95`}
-            >
-              <FiBox /> Modules
-            </button>
-          </div>
-          <div className="flex items-center gap-3">
+    <div className={`flex h-screen min-h-0 overflow-hidden font-mono text-[13px] ${lm.page}`}>
+      <Sidebar showRooms onOpenAccount={() => setIsAccountOpen(true)} onOpenSettings={() => setIsSettingsOpen(true)} />
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className={`flex flex-shrink-0 flex-wrap items-center gap-3 border-b px-3 py-2 ${lm.header}`}>
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen((v) => !v)}
+            className={`hidden h-9 w-9 items-center justify-center rounded border border-lumen-line transition hover:border-lumen-signal/50 lg:flex ${lm.inset}`}
+            aria-label="Toggle rooms"
+          >
+            {isSidebarOpen ? <FiChevronsLeft className="h-4 w-4 text-lumen-signal" /> : <FiChevronsRight className="h-4 w-4 text-lumen-signal" />}
+          </button>
+          <span className="font-display text-lg font-extrabold tracking-tighter text-lumen-signal">COLEARN</span>
+          <code className={`rounded border px-2 py-0.5 font-mono text-[11px] ${lm.pill}`}>{user.roomId || "———"}</code>
+          <span className={`hidden sm:inline text-[10px] ${lm.muted}`}>⌘↵ run</span>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => {
+              const effectiveRoomId = user.roomId || params.roomId;
+              if (!effectiveRoomId) return;
+              navigate(`/learn/${effectiveRoomId}/choose`);
+            }}
+            className={`rounded border border-lumen-signal/40 px-3 py-1.5 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-lumen-signal transition hover:bg-lumen-signal/10`}
+          >
+            Modules →
+          </button>
+        </header>
+
+        <div className={`flex flex-shrink-0 flex-wrap items-end justify-between gap-2 border-b px-2 ${lm.bar}`}>
+          <div className="flex">{tabBtn("ai", "Tutor", FiBox)}{tabBtn("chat", "Chat", FiMessageCircle)}{tabBtn("info", "Session", FiUsers)}</div>
+          <div className="flex items-center gap-2 pb-1">
             <select
               value={language}
               onChange={(e) => handleLanguageChange(e.target.value)}
-              className={`${isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-300 text-gray-900 shadow-sm hover:border-blue-400"} border px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200`}
+              className={`rounded-md border py-1.5 pl-2 pr-6 text-xs ${lm.input}`}
             >
               <option value="javascript">JavaScript</option>
               <option value="python">Python</option>
@@ -874,49 +889,40 @@ const CodeEditor: React.FC = () => {
               <option value="go">Go</option>
             </select>
             <button
+              type="button"
               onClick={handleSubmit}
-              className={`bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md shadow-lg transition-all flex items-center justify-center gap-2 ${isLoading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105 active:scale-95'} duration-200`}
+              className={`flex items-center gap-2 rounded-md px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition ${lm.run} ${isLoading ? "pointer-events-none opacity-60" : ""}`}
               disabled={isLoading}
             >
-              {isLoading && <AiOutlineLoading3Quarters className="animate-spin" />}
-              <span>{currentButtonState}</span>
+              {isLoading && <AiOutlineLoading3Quarters className="h-4 w-4 animate-spin" />}
+              {currentButtonState}
             </button>
-            {/* <button
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-all duration-200 hover:scale-105 active:scale-95 shadow-md"
-            >
-              Logout
-            </button> */}
           </div>
-        </nav>
+        </div>
 
-        <div className="flex flex-1 gap-4 overflow-hidden flex-col lg:flex-row">
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <div className={`flex-1 border ${isDark ? "border-gray-800" : "border-gray-300 bg-gray-50"} rounded-lg overflow-hidden shadow-2xl transition-all duration-200`}>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className={`min-h-0 flex-1 overflow-hidden border-b border-lumen-line lg:border-b-0 lg:border-r ${lm.editorFrame}`}>
               <MonacoEditor
+                height="100%"
                 value={code}
                 language={language}
                 theme={isDark ? "vs-dark" : "vs"}
                 onMount={handleEditorDidMount}
-                options={{ minimap: { enabled: false }, fontSize: 14 }}
+                options={{ minimap: { enabled: false }, fontSize: 14, fontFamily: "'IBM Plex Mono', monospace" }}
               />
             </div>
             {renderBottomIoPanel()}
           </div>
-
-          <div className={`flex flex-col lg:w-1/3 flex-1 lg:flex-initial`}>
+          <aside
+            className={`flex max-h-[48vh] min-h-0 w-full flex-col overflow-hidden border-lumen-line lg:max-h-none lg:w-[min(100vw,420px)] lg:flex-shrink-0 lg:border-l ${lm.rail}`}
+          >
             {renderPanelContent()}
-          </div>
+          </aside>
         </div>
       </div>
-      <AccountModal
-        isOpen={isAccountOpen}
-        onClose={() => setIsAccountOpen(false)}
-      />
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      <AccountModal isOpen={isAccountOpen} onClose={() => setIsAccountOpen(false)} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 };

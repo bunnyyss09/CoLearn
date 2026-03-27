@@ -3,7 +3,6 @@ import { useRecoilValue } from "recoil";
 import { useNavigate, useParams } from "react-router-dom";
 import { authAtom } from "../atoms/authAtom";
 import { themeAtom } from "../atoms/themeAtom";
-import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import { IP_ADDRESS } from "../Globle";
 import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
@@ -43,7 +42,6 @@ const Dashboard: React.FC = () => {
   const { roomId } = useParams<{ roomId?: string }>();
   const auth = useRecoilValue(authAtom);
   const theme = useRecoilValue(themeAtom);
-  const isSidebarOpen = useRecoilValue(sidebarOpenAtom);
   const isDark = theme === "dark";
   const navigate = useNavigate();
 
@@ -117,7 +115,7 @@ const Dashboard: React.FC = () => {
     if (loadingProfile) {
       return (
         <div className="flex items-center justify-center py-20">
-          <AiOutlineLoading3Quarters className="animate-spin text-blue-500" size={32} />
+          <AiOutlineLoading3Quarters className="animate-spin text-violet-500" size={32} />
         </div>
       );
     }
@@ -129,7 +127,7 @@ const Dashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         {/* Welcome Header */}
-        <div className={`p-6 rounded-xl ${isDark ? "bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-gray-700" : "bg-gradient-to-r from-blue-100 to-purple-100 border-blue-200"} border`}>
+        <div className={`rounded-2xl border p-6 backdrop-blur-md ${isDark ? "border-violet-500/20 bg-gradient-to-br from-violet-950/50 to-zinc-900/80" : "border-violet-200/60 bg-gradient-to-br from-white to-violet-50/90 shadow-panel"}`}>
           <h1 className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
             Welcome back, {auth.user?.name || "Learner"}!
           </h1>
@@ -140,7 +138,7 @@ const Dashboard: React.FC = () => {
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`rounded-2xl border p-4 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${isDark ? "bg-blue-900/50" : "bg-blue-100"}`}>
                 <FiMessageCircle className="text-blue-500" size={20} />
@@ -154,7 +152,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`rounded-2xl border p-4 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${passRate !== null && passRate >= 70 ? "bg-green-900/50" : "bg-yellow-900/50"}`}>
                 <FiCode className={passRate !== null && passRate >= 70 ? "text-green-500" : "text-yellow-500"} size={20} />
@@ -168,7 +166,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`rounded-2xl border p-4 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${isDark ? "bg-green-900/50" : "bg-green-100"}`}>
                 <FiBook className="text-green-500" size={20} />
@@ -182,7 +180,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`rounded-2xl border p-4 backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${isDark ? "bg-purple-900/50" : "bg-purple-100"}`}>
                 <FiPlay className="text-purple-500" size={20} />
@@ -204,7 +202,7 @@ const Dashboard: React.FC = () => {
         {/* Areas to Improve & Topics */}
         <div className="grid md:grid-cols-2 gap-4">
           {/* Areas to Focus On */}
-          <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`rounded-2xl border p-5 backdrop-blur-sm transition-all duration-300 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
             <h3 className={`font-semibold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
               Areas to Focus On
             </h3>
@@ -230,7 +228,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Frequently Asked Topics */}
-          <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`rounded-2xl border p-5 backdrop-blur-sm transition-all duration-300 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
             <h3 className={`font-semibold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
               Topics You're Exploring
             </h3>
@@ -258,7 +256,7 @@ const Dashboard: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => navigate("/")}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="colearn-btn-primary px-5 py-2.5 text-sm"
             >
               + Create / Join Room
             </button>
@@ -277,7 +275,7 @@ const Dashboard: React.FC = () => {
     if (loadingRoom) {
       return (
         <div className="flex items-center justify-center py-20">
-          <AiOutlineLoading3Quarters className="animate-spin text-blue-500" size={32} />
+          <AiOutlineLoading3Quarters className="animate-spin text-violet-500" size={32} />
         </div>
       );
     }
@@ -299,7 +297,7 @@ const Dashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         {/* Room Header */}
-        <div className={`p-6 rounded-xl ${isDark ? "bg-gradient-to-r from-indigo-900/50 to-blue-900/50 border-gray-700" : "bg-gradient-to-r from-indigo-100 to-blue-100 border-blue-200"} border`}>
+        <div className={`rounded-2xl border p-6 backdrop-blur-md ${isDark ? "border-cyan-500/20 bg-gradient-to-br from-zinc-900 to-violet-950/50" : "border-slate-200/80 bg-gradient-to-br from-white to-cyan-50/80 shadow-panel"}`}>
           <div className="flex items-start justify-between">
             <div>
               <h1 className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -323,7 +321,7 @@ const Dashboard: React.FC = () => {
         {/* Room Info Grid */}
         <div className="grid md:grid-cols-2 gap-4">
           {/* Members */}
-          <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`rounded-2xl border p-5 backdrop-blur-sm transition-all duration-300 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
             <h3 className={`font-semibold mb-3 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
               <FiUsers size={18} />
               Members ({roomDetails.members?.length || 0})
@@ -353,7 +351,7 @@ const Dashboard: React.FC = () => {
 
           {/* Learning Module Info (if learning room) */}
           {roomDetails.isLearningRoom ? (
-            <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+            <div className={`rounded-2xl border p-5 backdrop-blur-sm transition-all duration-300 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
               <h3 className={`font-semibold mb-3 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
                 <FiBook size={18} />
                 Learning Module
@@ -386,7 +384,7 @@ const Dashboard: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+            <div className={`rounded-2xl border p-5 backdrop-blur-sm transition-all duration-300 ${isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200/90 bg-white/90 shadow-panel"}`}>
               <h3 className={`font-semibold mb-3 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
                 <FiCode size={18} />
                 Collaboration Mode
@@ -407,7 +405,7 @@ const Dashboard: React.FC = () => {
         {/* Enter Room Button */}
         <button
           onClick={handleEnterRoom}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+          className="colearn-btn-primary w-full py-4 text-lg shadow-glow"
         >
           {roomDetails.isLearningRoom ? "Continue Learning" : "Enter Room"}
         </button>
@@ -416,15 +414,15 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className={`flex h-screen ${isDark ? "bg-gray-950" : "bg-gray-100"}`}>
+    <div className={`flex h-screen ${isDark ? "colearn-bg-dark" : "colearn-bg-light"}`}>
       <Sidebar
         showRooms={true}
         onOpenAccount={() => setIsAccountOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      <main className={`flex-1 overflow-y-auto p-6 ${isSidebarOpen ? "" : ""}`}>
-        <div className="max-w-4xl mx-auto">
+      <main className="flex-1 overflow-y-auto p-6 lg:p-8">
+        <div className="mx-auto max-w-4xl animate-fade-up">
           {roomId ? renderRoomDetails() : renderUserProfile()}
         </div>
       </main>

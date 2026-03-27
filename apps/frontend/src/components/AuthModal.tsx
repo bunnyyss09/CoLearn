@@ -34,9 +34,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, IP_AD
 
     try {
       const endpoint = isSignUp ? "/auth/signup" : "/auth/signin";
-      const body = isSignUp
-        ? { name, email, password }
-        : { email, password };
+      const body = isSignUp ? { name, email, password } : { email, password };
 
       const response = await fetch(`http://${IP_ADDRESS}:3000${endpoint}`, {
         method: "POST",
@@ -52,7 +50,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, IP_AD
         return;
       }
 
-      // Store token in localStorage
       localStorage.setItem("authToken", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
@@ -74,120 +71,97 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, IP_AD
 
   if (!isOpen) return null;
 
+  const inputBase = `${isDark ? "border-white/10 bg-white/5 text-white placeholder-zinc-500" : "border-slate-200 bg-white text-slate-900 placeholder-slate-400"} colearn-input border pl-10`;
+
   return (
-    <div className={`fixed inset-0 ${isDark ? "bg-black/50" : "bg-gray-900/50"} flex items-center justify-center z-50 p-4`}>
-      <div className={`${isDark ? "bg-gray-800 border-gray-700" : "bg-blue-50 border-blue-200"} rounded-xl shadow-2xl w-full max-w-md relative border-2`}>
-        {/* Close button */}
+    <div className={`colearn-modal-overlay z-[110] ${isDark ? "bg-black/60" : "bg-slate-900/45"}`}>
+      <div
+        className={`colearn-modal-panel relative max-w-md overflow-hidden border-2 ${
+          isDark ? "border-white/10 bg-zinc-900/95" : "border-slate-200/80 bg-white/95 shadow-2xl"
+        }`}
+      >
+        <div className="h-1 w-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400" />
         <button
           onClick={onClose}
-          className={`absolute top-4 right-4 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"} transition-colors`}
+          className={`absolute right-3 top-5 rounded-xl p-2 transition-all ${isDark ? "text-zinc-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100"}`}
         >
           <AiOutlineClose size={24} />
         </button>
 
-        {/* Header */}
-        <div className={`p-6 border-b ${isDark ? "border-gray-700" : "border-blue-200 bg-blue-100/50"}`}>
-          <h2 className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
-            {isSignUp ? "Create Account" : "Sign In"}
+        <div className={`border-b px-6 pb-5 pt-8 ${isDark ? "border-white/10" : "border-slate-100"}`}>
+          <h2 className={`text-2xl font-bold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+            {isSignUp ? "Create account" : "Welcome back"}
           </h2>
-          <p className={`${isDark ? "text-gray-400" : "text-gray-600"} text-sm mt-1`}>
-            {isSignUp
-              ? "Join CoLearn to start coding together"
-              : "Welcome back! Sign in to continue"}
+          <p className={`mt-1.5 text-sm ${isDark ? "text-zinc-400" : "text-slate-600"}`}>
+            {isSignUp ? "Join CoLearn and start building together." : "Sign in to open your rooms and editor."}
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 p-6">
           {isSignUp && (
-            <div>
-              <label className={`block text-sm font-medium ${isDark ? "text-gray-300" : "text-gray-700"} mb-2`}>
-                Name
-              </label>
+            <div className="animate-fade-up">
+              <label className={`mb-2 block text-sm font-medium ${isDark ? "text-zinc-300" : "text-slate-700"}`}>Name</label>
               <div className="relative">
-                <AiOutlineUser className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDark ? "text-gray-400" : "text-gray-500"}`} size={20} />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  required
-                  className={`w-full pl-10 pr-4 py-2 ${isDark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition`}
+                <AiOutlineUser
+                  className={`absolute left-3 top-1/2 -translate-y-1/2 transform ${isDark ? "text-zinc-500" : "text-slate-400"}`}
+                  size={20}
                 />
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required className={`w-full ${inputBase}`} />
               </div>
             </div>
           )}
 
-          <div>
-            <label className={`block text-sm font-medium ${isDark ? "text-gray-300" : "text-gray-700"} mb-2`}>
-              Email
-            </label>
+          <div className="animate-fade-up" style={{ animationDelay: "60ms" }}>
+            <label className={`mb-2 block text-sm font-medium ${isDark ? "text-zinc-300" : "text-slate-700"}`}>Email</label>
             <div className="relative">
-              <AiOutlineMail className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDark ? "text-gray-400" : "text-gray-500"}`} size={20} />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
-                className={`w-full pl-10 pr-4 py-2 ${isDark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500"} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition`}
-              />
+              <AiOutlineMail className={`absolute left-3 top-1/2 -translate-y-1/2 transform ${isDark ? "text-zinc-500" : "text-slate-400"}`} size={20} />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required className={`w-full ${inputBase}`} />
             </div>
           </div>
 
-          <div>
-            <label className={`block text-sm font-medium ${isDark ? "text-gray-300" : "text-gray-700"} mb-2`}>
-              Password
-            </label>
+          <div className="animate-fade-up" style={{ animationDelay: "120ms" }}>
+            <label className={`mb-2 block text-sm font-medium ${isDark ? "text-zinc-300" : "text-slate-700"}`}>Password</label>
             <div className="relative">
-              <AiOutlineLock className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDark ? "text-gray-400" : "text-gray-500"}`} size={20} />
+              <AiOutlineLock className={`absolute left-3 top-1/2 -translate-y-1/2 transform ${isDark ? "text-zinc-500" : "text-slate-400"}`} size={20} />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={isSignUp ? "At least 6 characters" : "Enter your password"}
+                placeholder={isSignUp ? "At least 6 characters" : "••••••••"}
                 required
                 minLength={isSignUp ? 6 : undefined}
-                className={`w-full pl-10 pr-4 py-2 ${isDark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500"} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition`}
+                className={`w-full ${inputBase}`}
               />
             </div>
           </div>
 
           {error && (
-            <div className={`${isDark ? "bg-red-900/50 border-red-700 text-red-200" : "bg-red-50 border-red-200 text-red-700"} border px-4 py-3 rounded-lg text-sm`}>
+            <div
+              className={`animate-fade-up rounded-xl border px-4 py-3 text-sm ${
+                isDark ? "border-red-500/30 bg-red-950/40 text-red-200" : "border-red-200 bg-red-50 text-red-700"
+              }`}
+            >
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {loading ? "Processing..." : isSignUp ? "Sign Up" : "Sign In"}
+          <button type="submit" disabled={loading} className="colearn-btn-primary w-full py-3 text-sm disabled:opacity-50">
+            {loading ? "Please wait…" : isSignUp ? "Create account" : "Sign in"}
           </button>
 
-          <div className={`text-center text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+          <div className={`text-center text-sm ${isDark ? "text-zinc-500" : "text-slate-600"}`}>
             {isSignUp ? (
               <>
                 Already have an account?{" "}
-                <button
-                  type="button"
-                  onClick={switchMode}
-                  className={`${isDark ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-700"} font-medium transition-colors`}
-                >
-                  Sign In
+                <button type="button" onClick={switchMode} className="font-semibold text-violet-500 transition-colors hover:text-violet-400">
+                  Sign in
                 </button>
               </>
             ) : (
               <>
-                Don't have an account?{" "}
-                <button
-                  type="button"
-                  onClick={switchMode}
-                  className={`${isDark ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-700"} font-medium transition-colors`}
-                >
-                  Sign Up
+                New here?{" "}
+                <button type="button" onClick={switchMode} className="font-semibold text-violet-500 transition-colors hover:text-violet-400">
+                  Create account
                 </button>
               </>
             )}
@@ -199,4 +173,3 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, IP_AD
 };
 
 export default AuthModal;
-

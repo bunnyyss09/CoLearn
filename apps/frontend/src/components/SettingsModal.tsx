@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { useRecoilState } from "recoil";
 import { themeAtom, Theme } from "../atoms/themeAtom";
+import { AiOutlineClose } from "react-icons/ai";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -11,18 +12,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const [theme, setTheme] = useRecoilState(themeAtom);
   const isDark = theme === "dark";
 
-  // Handle Esc key to close modal
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isOpen) {
+      if (event.key === "Escape" && isOpen) {
         onClose();
       }
     };
-
-    window.addEventListener('keydown', handleEsc);
-    return () => {
-      window.removeEventListener('keydown', handleEsc);
-    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -33,38 +30,51 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className={`fixed inset-0 z-50 ${isDark ? "bg-black/50" : "bg-gray-900/50"} flex items-center justify-center p-4`}>
-      <div className={`${isDark ? "bg-gray-900 border-gray-700" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-xl shadow-2xl w-full max-w-sm p-6 transition-all duration-200`}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Settings</h2>
+    <div className={`colearn-modal-overlay z-[100] ${isDark ? "bg-black/55" : "bg-slate-900/40"}`}>
+      <div
+        className={`colearn-modal-panel max-w-sm border-2 p-0 ${
+          isDark ? "border-white/10 bg-zinc-900/95" : "border-slate-200/90 bg-white shadow-2xl"
+        }`}
+      >
+        <div className="h-1 w-full bg-gradient-to-r from-violet-500 to-cyan-400" />
+        <div className={`flex items-center justify-between border-b px-5 py-4 ${isDark ? "border-white/10" : "border-slate-100"}`}>
+          <h2 className={`text-lg font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Settings</h2>
           <button
+            type="button"
             onClick={onClose}
-            className={`${isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"} text-sm`}
+            className={`rounded-xl p-2 transition-all ${isDark ? "text-zinc-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100"}`}
+            aria-label="Close"
           >
-            Close
+            <AiOutlineClose size={22} />
           </button>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-4 p-5">
           <div>
-            <p className={`text-sm font-semibold mb-2 ${isDark ? "text-gray-200" : "text-gray-700"}`}>Theme</p>
-            <div className="flex gap-3">
+            <p className={`mb-3 text-sm font-semibold ${isDark ? "text-zinc-300" : "text-slate-700"}`}>Appearance</p>
+            <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => changeTheme("dark")}
-                className={`px-3 py-2 rounded-md text-sm transition-all duration-200 ${
+                className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-all duration-300 ${
                   theme === "dark"
-                    ? "bg-blue-600 text-white shadow-md"
-                    : isDark ? "bg-gray-800 text-gray-300 hover:bg-gray-700" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                } hover:scale-105 active:scale-95`}
+                    ? "border-violet-500/50 bg-violet-500/20 text-white shadow-glow"
+                    : isDark
+                      ? "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-violet-200"
+                }`}
               >
                 Dark
               </button>
               <button
+                type="button"
                 onClick={() => changeTheme("light")}
-                className={`px-3 py-2 rounded-md text-sm transition-all duration-200 ${
+                className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-all duration-300 ${
                   theme === "light"
-                    ? "bg-blue-600 text-white shadow-md"
-                    : isDark ? "bg-gray-800 text-gray-300 hover:bg-gray-700" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                } hover:scale-105 active:scale-95`}
+                    ? "border-cyan-500/50 bg-cyan-500/15 text-slate-900 shadow-glow-cyan"
+                    : isDark
+                      ? "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-cyan-200"
+                }`}
               >
                 Light
               </button>
@@ -77,5 +87,3 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 };
 
 export default SettingsModal;
-
-

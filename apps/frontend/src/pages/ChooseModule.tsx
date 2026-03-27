@@ -204,32 +204,24 @@ const ChooseModule: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen font-sans flex ${
-        isDark
-          ? "bg-black text-gray-200"
-          : "bg-gradient-to-br from-gray-50 to-blue-50"
-      }`}
+      className={`flex min-h-screen font-sans ${isDark ? "colearn-bg-dark text-zinc-200" : "colearn-bg-light text-slate-900"}`}
     >
       <Sidebar
         showRooms
         onOpenAccount={() => setIsAccountOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
-      <div className="flex flex-col flex-1 p-4 gap-4 overflow-auto">
+      <div className="flex flex-1 flex-col gap-4 overflow-auto p-4 lg:p-6">
         <nav
-          className={`border rounded-xl px-4 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 ${
-            isDark
-              ? "bg-gray-900 border-gray-800"
-              : "bg-blue-50/80 border-blue-200"
+          className={`colearn-glass-nav flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between ${
+            isDark ? "colearn-glass-nav--dark" : "colearn-glass-nav--light"
           }`}
         >
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen((v) => !v)}
-              className={`hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md border ${
-                isDark
-                  ? "bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700"
-                  : "bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300"
+              className={`hidden h-10 w-10 items-center justify-center rounded-xl border transition-all duration-300 hover:scale-105 lg:inline-flex ${
+                isDark ? "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10" : "border-slate-200 bg-white text-slate-800"
               }`}
             >
               {sidebarOpen ? (
@@ -240,23 +232,15 @@ const ChooseModule: React.FC = () => {
             </button>
             <button
               onClick={handleBackToEditor}
-              className={`p-2 rounded-lg border ${
-                isDark
-                  ? "bg-gray-800 hover:bg-gray-700 border-gray-700"
-                  : "bg-white hover:bg-gray-100 border-gray-300"
+              className={`rounded-xl border p-2 transition-all duration-300 hover:-translate-y-0.5 ${
+                isDark ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-slate-200 bg-white hover:border-violet-200"
               }`}
               title="Back to editor"
             >
               <span className="text-lg">←</span>
             </button>
             <div>
-              <div
-                className={`text-xl font-bold ${
-                  isDark ? "text-white" : "text-gray-900"
-                }`}
-              >
-                CoLearn · Learn
-              </div>
+              <div className={`text-xl font-bold tracking-tight ${isDark ? "text-gradient-dark" : "text-gradient"}`}>CoLearn · Learn</div>
               <p
                 className={`text-xs ${
                   isDark ? "text-gray-400" : "text-gray-600"
@@ -269,8 +253,8 @@ const ChooseModule: React.FC = () => {
         </nav>
 
         <div
-          className={`flex-1 rounded-xl border p-6 ${
-            isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
+          className={`flex-1 rounded-3xl border p-6 backdrop-blur-md transition-shadow duration-300 ${
+            isDark ? "border-white/10 bg-zinc-900/70 shadow-panel-dark" : "border-slate-200/90 bg-white/85 shadow-panel"
           }`}
         >
           <h1
@@ -416,14 +400,8 @@ const ChooseModule: React.FC = () => {
                             <button
                               onClick={() => handleStartModule(mod.moduleId)}
                               disabled={startingId !== null}
-                              className={`mt-auto w-full py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
-                                startingId === mod.moduleId
-                                  ? "opacity-70 cursor-wait"
-                                  : ""
-                              } ${
-                                isDark
-                                  ? "bg-blue-600 hover:bg-blue-500 text-white"
-                                  : "bg-blue-600 hover:bg-blue-700 text-white"
+                              className={`colearn-btn-primary mt-auto w-full py-2.5 text-sm ${
+                                startingId === mod.moduleId ? "cursor-wait opacity-70" : ""
                               }`}
                             >
                               {startingId === mod.moduleId ? "Starting…" : "Start"}
@@ -450,37 +428,32 @@ const ChooseModule: React.FC = () => {
       
       {/* Switch Module Confirmation Modal */}
       {switchConfirm?.show && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className={`max-w-md w-full mx-4 p-6 rounded-xl shadow-xl ${
-            isDark ? "bg-gray-800 border border-gray-700" : "bg-white border border-gray-200"
-          }`}>
-            <h3 className={`text-lg font-bold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
-              Switch Module?
-            </h3>
-            <p className={`text-sm mb-4 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
-              This room is currently using <strong>"{switchConfirm.currentModuleTitle}"</strong>. 
-              Switching will reset your progress for that module in this room.
-            </p>
-            <p className={`text-sm mb-6 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-              Are you sure you want to switch to the new module?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={handleCancelSwitch}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isDark 
-                    ? "bg-gray-700 hover:bg-gray-600 text-gray-200" 
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmSwitch}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-              >
-                Switch Module
-              </button>
+        <div className="colearn-modal-overlay z-[90] bg-black/55">
+          <div
+            className={`colearn-modal-panel max-w-md border-2 p-0 ${
+              isDark ? "border-white/10 bg-zinc-900/95" : "border-slate-200 bg-white shadow-2xl"
+            }`}
+          >
+            <div className="h-1 w-full bg-gradient-to-r from-amber-500 to-violet-500" />
+            <div className="p-6">
+              <h3 className={`mb-3 text-lg font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Switch module?</h3>
+              <p className={`mb-4 text-sm leading-relaxed ${isDark ? "text-zinc-400" : "text-slate-600"}`}>
+                This room is currently using <strong>"{switchConfirm.currentModuleTitle}"</strong>. Switching will reset progress for that module in this room.
+              </p>
+              <p className={`mb-6 text-sm ${isDark ? "text-zinc-500" : "text-slate-500"}`}>Continue with the new module?</p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={handleCancelSwitch}
+                  className={`colearn-btn-secondary px-4 py-2.5 text-sm font-semibold ${
+                    isDark ? "border-white/15 bg-white/5 text-zinc-200" : "border-slate-200 bg-white text-slate-800"
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button onClick={handleConfirmSwitch} className="colearn-btn-primary px-4 py-2.5 text-sm">
+                  Switch module
+                </button>
+              </div>
             </div>
           </div>
         </div>

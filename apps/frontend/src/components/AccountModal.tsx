@@ -3,7 +3,7 @@ import { useRecoilValue } from "recoil";
 import { authAtom } from "../atoms/authAtom";
 import { themeAtom } from "../atoms/themeAtom";
 import { IP_ADDRESS } from "../Globle";
-import { AiOutlineLoading3Quarters } from "react-icons/ai";
+import { AiOutlineLoading3Quarters, AiOutlineClose } from "react-icons/ai";
 
 interface LearningProfile {
   weaknesses: { category: string; description: string; occurrences: number }[];
@@ -117,7 +117,7 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
     return (
       <div className="space-y-4 text-sm">
         {/* Stats Overview */}
-        <div className={`grid grid-cols-3 gap-2 p-3 rounded-lg ${isDark ? "bg-gray-800" : "bg-white border border-gray-200"}`}>
+        <div className={`grid grid-cols-3 gap-2 rounded-xl border p-3 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50/80"}`}>
           <div className="text-center">
             <div className={`text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{profile.metrics.totalAiQuestions}</div>
             <div className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>AI Questions</div>
@@ -146,7 +146,7 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
             <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
               Areas to Focus On
             </h4>
-            <div className={`space-y-1.5 p-3 rounded-lg ${isDark ? "bg-gray-800" : "bg-white border border-gray-200"}`}>
+            <div className={`space-y-1.5 rounded-xl border p-3 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-white"}`}>
               {profile.weaknesses.slice(0, 4).map((w, i) => (
                 <div key={i} className="flex items-center justify-between">
                   <span className={isDark ? "text-gray-300" : "text-gray-700"}>
@@ -187,45 +187,59 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className={`fixed inset-0 z-50 ${isDark ? "bg-black/50" : "bg-gray-900/50"} flex items-center justify-center p-4`}>
-      <div className={`${isDark ? "bg-gray-900 border-gray-700" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-xl shadow-2xl w-full max-w-md p-6 transition-all duration-200`}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-            {activeTab === "account" ? "Account" : "Learning Insights"}
+    <div className={`colearn-modal-overlay z-[100] ${isDark ? "bg-black/55" : "bg-slate-900/40"}`}>
+      <div
+        className={`colearn-modal-panel max-w-md overflow-hidden border-2 p-0 ${
+          isDark ? "border-white/10 bg-zinc-900/95" : "border-slate-200/90 bg-white shadow-2xl"
+        }`}
+      >
+        <div className="h-1 w-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400" />
+        <div className={`flex items-center justify-between border-b px-5 py-4 ${isDark ? "border-white/10" : "border-slate-100"}`}>
+          <h2 className={`text-lg font-bold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+            {activeTab === "account" ? "Account" : "Learning insights"}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className={`${isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"} text-sm`}
+            className={`rounded-xl p-2 transition-all ${isDark ? "text-zinc-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100"}`}
+            aria-label="Close"
           >
-            Close
+            <AiOutlineClose size={22} />
           </button>
         </div>
 
-        {/* Tab Switcher */}
-        <div className={`flex mb-4 p-1 rounded-lg ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-          <button
-            onClick={() => setActiveTab("account")}
-            className={`flex-1 py-1.5 text-sm rounded-md transition-all ${
-              activeTab === "account"
-                ? "bg-blue-600 text-white"
-                : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Account
-          </button>
-          <button
-            onClick={() => setActiveTab("insights")}
-            className={`flex-1 py-1.5 text-sm rounded-md transition-all ${
-              activeTab === "insights"
-                ? "bg-blue-600 text-white"
-                : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Learning Insights
-          </button>
-        </div>
+        <div className="px-5 pb-5 pt-4">
+          <div className={`mb-4 flex rounded-xl border p-1 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-100/80"}`}>
+            <button
+              type="button"
+              onClick={() => setActiveTab("account")}
+              className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all duration-300 ${
+                activeTab === "account"
+                  ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-md"
+                  : isDark
+                    ? "text-zinc-400 hover:text-white"
+                    : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Account
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("insights")}
+              className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all duration-300 ${
+                activeTab === "insights"
+                  ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-md"
+                  : isDark
+                    ? "text-zinc-400 hover:text-white"
+                    : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Insights
+            </button>
+          </div>
 
-        {activeTab === "account" ? renderAccountTab() : renderInsightsTab()}
+          {activeTab === "account" ? renderAccountTab() : renderInsightsTab()}
+        </div>
       </div>
     </div>
   );
