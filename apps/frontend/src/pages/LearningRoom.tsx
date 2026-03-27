@@ -1042,37 +1042,55 @@ const LearningRoom: React.FC = () => {
     );
   };
 
+  const learningRoomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full min-h-0 transition-all duration-200`;
+
+  const renderPersistentLearningChat = () => {
+    if (!chatReady || !chatId || !socket) return null;
+    return (
+      <div
+        className={`${learningRoomChatShellClass} ${activePanel === "chat" ? "flex" : "hidden"}`}
+        aria-hidden={activePanel !== "chat"}
+      >
+        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+          <FiMessageCircle /> Room Chat
+        </h2>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Chat
+            socket={socket}
+            chatId={chatId}
+            userId={user.id}
+            userName={user.name}
+            IP_ADDRESS={IP_ADDRESS}
+            panelActive={activePanel === "chat"}
+            onLiveChatMessage={() => setChatPanelUnread(true)}
+          />
+        </div>
+      </div>
+    );
+  };
+
   const renderRightPanel = () => {
     if (activePanel === "chat") {
-      return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiMessageCircle /> Room Chat
-          </h2>
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {chatReady && chatId && socket ? (
-              <Chat
-                socket={socket}
-                chatId={chatId}
-                userId={user.id}
-                userName={user.name}
-                IP_ADDRESS={IP_ADDRESS}
-                panelActive={activePanel === "chat"}
-                onLiveChatMessage={() => setChatPanelUnread(true)}
-              />
-            ) : (
-              <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
-                Chat is unavailable until the room is fully initialized.
-              </div>
-            )}
+      if (!chatReady || !chatId || !socket) {
+        return (
+          <div className={`${learningRoomChatShellClass} flex flex-col`}>
+            <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+              <FiMessageCircle /> Room Chat
+            </h2>
+            <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
+              Chat is unavailable until the room is fully initialized.
+            </div>
           </div>
-        </div>
-      );
+        );
+      }
+      return renderPersistentLearningChat();
     }
 
     if (activePanel === "info") {
       return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
+        <div className="flex flex-col flex-1 min-h-0 h-full">
+          {renderPersistentLearningChat()}
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
           <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
             <FiUsers /> Room
           </h2>
@@ -1113,12 +1131,15 @@ const LearningRoom: React.FC = () => {
             </div>
           </div>
         </div>
+        </div>
       );
     }
 
     // Default: AI Guide
     return (
-      <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full overflow-hidden transition-all duration-200`}>
+      <div className="flex flex-col flex-1 min-h-0 h-full">
+        {renderPersistentLearningChat()}
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
         <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
           <FiBox /> AI Guide
         </h2>
@@ -1185,6 +1206,7 @@ const LearningRoom: React.FC = () => {
             <AiOutlineSend size={20} />
           </button>
         </form>
+      </div>
       </div>
     );
   };

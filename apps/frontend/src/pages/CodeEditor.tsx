@@ -4,7 +4,15 @@ import { userAtom } from "../atoms/userAtom";
 import { authAtom } from "../atoms/authAtom";
 import { useRecoilState, useRecoilValue } from "recoil";
 import { AiOutlineLoading3Quarters, AiOutlineSend, AiOutlineCopy, AiOutlineCheck } from "react-icons/ai"; // Import icons
-import { FiMessageCircle, FiUsers, FiHash, FiBox, FiChevronsLeft, FiChevronsRight } from "react-icons/fi";
+import { FiMessageCircle, FiUsers, FiHash, FiBox, FiChevronsLeft, FiChevronsRight, FiChevronDown } from "react-icons/fi";
+import {
+  SiCplusplus,
+  SiGo,
+  SiJavascript,
+  SiOpenjdk,
+  SiPython,
+  SiRust,
+} from "react-icons/si";
 import { socketAtom } from "../atoms/socketAtom";
 import { useNavigate, useParams } from "react-router-dom";
 import { connectedUsersAtom } from "../atoms/connectedUsersAtom";
@@ -21,6 +29,20 @@ import remarkGfm from 'remark-gfm';
 
 // Debounce delay for code sync (ms) - prevents flooding WebSocket on fast typing
 const CODE_SYNC_DEBOUNCE_MS = 150;
+
+const LANGUAGE_OPTIONS: {
+  value: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string; size?: number }>;
+  iconClass: string;
+}[] = [
+  { value: "javascript", label: "JavaScript", Icon: SiJavascript, iconClass: "text-[#F7DF1E]" },
+  { value: "python", label: "Python", Icon: SiPython, iconClass: "text-[#3776AB]" },
+  { value: "cpp", label: "C++", Icon: SiCplusplus, iconClass: "text-[#00599C]" },
+  { value: "java", label: "Java", Icon: SiOpenjdk, iconClass: "text-[#EA2D2E]" },
+  { value: "rust", label: "Rust", Icon: SiRust, iconClass: "text-[#DEA584]" },
+  { value: "go", label: "Go", Icon: SiGo, iconClass: "text-[#00ADD8]" },
+];
 
 // AI Message type
 type AiMessage = {
@@ -96,6 +118,8 @@ const CodeEditor: React.FC = () => {
   const [_isLearningRoom, setIsLearningRoom] = useState<boolean>(false);
   const [_learningModuleId, setLearningModuleId] = useState<string | null>(null);
   const [roomDisplayName, setRoomDisplayName] = useState<string | null>(null);
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const langMenuRef = useRef<HTMLDivElement>(null);
 
   // Sidebar panel state
   const [activePanel, setActivePanel] = useState<"ai" | "chat" | "info" | null>("ai");
@@ -359,6 +383,24 @@ const CodeEditor: React.FC = () => {
   }, [aiMessages]);
 
   useEffect(() => {
+    if (!langMenuOpen) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setLangMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLangMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [langMenuOpen]);
+
+  useEffect(() => {
     if (activePanel === "ai") {
       setAiPanelUnread(false);
       lastSeenAiCountRef.current = aiMessages.length;
@@ -488,6 +530,34 @@ const CodeEditor: React.FC = () => {
     </div>
   );
 
+  const roomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full min-h-0 transition-all duration-200`;
+
+  /** Keeps Chat mounted while viewing AI / Room so messages and WS listener are not torn down. */
+  const renderPersistentChatPanel = () => {
+    if (!chatId) return null;
+    return (
+      <div
+        className={`${roomChatShellClass} ${activePanel === "chat" ? "flex" : "hidden"}`}
+        aria-hidden={activePanel !== "chat"}
+      >
+        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+          <FiMessageCircle /> Room Chat
+        </h2>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Chat
+            socket={socket}
+            chatId={chatId}
+            userId={user.id}
+            userName={user.name}
+            IP_ADDRESS={IP_ADDRESS}
+            panelActive={activePanel === "chat"}
+            onLiveChatMessage={() => setChatPanelUnread(true)}
+          />
+        </div>
+      </div>
+    );
+  };
+
   const renderPanelContent = () => {
     if (!activePanel) {
       return renderIoPanelRight();
@@ -495,7 +565,9 @@ const CodeEditor: React.FC = () => {
 
     if (activePanel === "ai") {
       return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full overflow-hidden transition-all duration-200`}>
+        <div className="flex flex-col flex-1 min-h-0 h-full">
+          {renderPersistentChatPanel()}
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
           <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
             <FiBox /> AI Assistant
           </h2>
@@ -572,39 +644,31 @@ const CodeEditor: React.FC = () => {
             </button>
           </form>
         </div>
-      );
-    }
-
-    if (activePanel === "chat") {
-      return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiMessageCircle /> Room Chat
-          </h2>
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {chatId ? (
-              <Chat
-                socket={socket}
-                chatId={chatId}
-                userId={user.id}
-                userName={user.name}
-                IP_ADDRESS={IP_ADDRESS}
-                panelActive={activePanel === "chat"}
-                onLiveChatMessage={() => setChatPanelUnread(true)}
-              />
-            ) : (
-              <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
-                Chat is unavailable until the room is fully initialized.
-              </div>
-            )}
-          </div>
         </div>
       );
     }
 
+    if (activePanel === "chat") {
+      if (!chatId) {
+        return (
+          <div className={`${roomChatShellClass} flex flex-col`}>
+            <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+              <FiMessageCircle /> Room Chat
+            </h2>
+            <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
+              Chat is unavailable until the room is fully initialized.
+            </div>
+          </div>
+        );
+      }
+      return renderPersistentChatPanel();
+    }
+
     if (activePanel === "info") {
       return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
+        <div className="flex flex-col flex-1 min-h-0 h-full">
+          {renderPersistentChatPanel()}
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
           <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
             <FiUsers /> Room
           </h2>
@@ -644,6 +708,7 @@ const CodeEditor: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
         </div>
       );
     }
@@ -919,18 +984,73 @@ const CodeEditor: React.FC = () => {
             </button>
           </div>
           <div className="flex items-center gap-3">
-            <select
-              value={language}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className={`${isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-300 text-gray-900 shadow-sm hover:border-blue-400"} border px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200`}
-            >
-              <option value="javascript">JavaScript</option>
-              <option value="python">Python</option>
-              <option value="cpp">C++</option>
-              <option value="java">Java</option>
-              <option value="rust">Rust</option>
-              <option value="go">Go</option>
-            </select>
+            <div className="relative" ref={langMenuRef}>
+              {(() => {
+                const current = LANGUAGE_OPTIONS.find((o) => o.value === language) ?? LANGUAGE_OPTIONS[0];
+                const CurrentIcon = current.Icon;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setLangMenuOpen((o) => !o)}
+                      aria-haspopup="listbox"
+                      aria-expanded={langMenuOpen}
+                      className={`flex items-center gap-2 min-w-[11rem] border px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ${
+                        isDark
+                          ? "bg-gray-800 border-gray-700 text-white hover:border-gray-500"
+                          : "bg-white border-gray-300 text-gray-900 shadow-sm hover:border-blue-400"
+                      }`}
+                    >
+                      <CurrentIcon className={`shrink-0 ${current.iconClass}`} size={20} aria-hidden />
+                      <span className="flex-1 text-left text-sm font-medium">{current.label}</span>
+                      <FiChevronDown
+                        size={18}
+                        className={`shrink-0 opacity-70 transition-transform ${langMenuOpen ? "rotate-180" : ""}`}
+                        aria-hidden
+                      />
+                    </button>
+                    {langMenuOpen && (
+                      <ul
+                        role="listbox"
+                        className={`absolute right-0 mt-1 py-1 min-w-full w-max rounded-md border shadow-lg z-50 ${
+                          isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                        }`}
+                      >
+                        {LANGUAGE_OPTIONS.map((opt) => {
+                          const OptIcon = opt.Icon;
+                          const selected = language === opt.value;
+                          return (
+                            <li key={opt.value} role="presentation">
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={selected}
+                                onClick={() => {
+                                  handleLanguageChange(opt.value);
+                                  setLangMenuOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
+                                  selected
+                                    ? isDark
+                                      ? "bg-blue-900/50 text-white"
+                                      : "bg-blue-50 text-blue-900"
+                                    : isDark
+                                      ? "text-gray-200 hover:bg-gray-700/80"
+                                      : "text-gray-800 hover:bg-gray-100"
+                                }`}
+                              >
+                                <OptIcon className={`shrink-0 ${opt.iconClass}`} size={20} aria-hidden />
+                                {opt.label}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
             <button
               onClick={handleSubmit}
               className={`bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md shadow-lg transition-all flex items-center justify-center gap-2 ${isLoading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105 active:scale-95'} duration-200`}
