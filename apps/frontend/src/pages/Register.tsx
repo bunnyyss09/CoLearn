@@ -26,6 +26,7 @@ const FeatureIcon = ({ children, isDark }: { children: React.ReactNode; isDark: 
 
 const Register = () => {
     const [roomId, setRoomId] = useState<string>("");
+    const [newRoomDisplayName, setNewRoomDisplayName] = useState<string>("");
     const [error, setError] = useState<string>("");
     const [isAccountOpen, setIsAccountOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -140,7 +141,11 @@ const Register = () => {
     };
 
     // This is your original, working socket logic
-    const initializeSocket = async (isJoining = false, learningModuleId?: string) => {
+    const initializeSocket = async (
+        isJoining = false,
+        learningModuleId?: string,
+        createDisplayName?: string
+    ) => {
         setError(""); // Clear previous errors
 
         // Check authentication
@@ -241,6 +246,9 @@ const Register = () => {
                                     },
                                     body: JSON.stringify({
                                         roomId: roomIdFromServer,
+                                        ...(createDisplayName
+                                            ? { displayName: createDisplayName }
+                                            : {}),
                                     }),
                                 });
 
@@ -297,7 +305,10 @@ const Register = () => {
     }
 
     const handleCreateRoom = () => {
-        if (!loading) initializeSocket(false);
+        if (!loading) {
+            const trimmed = newRoomDisplayName.trim();
+            initializeSocket(false, undefined, trimmed || undefined);
+        }
     }
 
     const handleJoinRoom = () => {
@@ -342,6 +353,10 @@ const Register = () => {
                             <div>
                                 <label htmlFor="roomId" className={`block text-sm font-medium ${isDark ? "text-gray-400" : "text-gray-700"} mb-2`}>Room ID (for joining)</label>
                                 <input type="text" id="roomId" placeholder="Enter 8-digit Room ID" value={roomId} onChange={(e) => setRoomId(e.target.value)} className={`w-full p-3 ${isDark ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300 hover:border-blue-400"} rounded-lg border focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200`} />
+                            </div>
+                            <div>
+                                <label htmlFor="roomName" className={`block text-sm font-medium ${isDark ? "text-gray-400" : "text-gray-700"} mb-2`}>Room name <span className={`font-normal ${isDark ? "text-gray-500" : "text-gray-500"}`}>(optional, when creating)</span></label>
+                                <input type="text" id="roomName" placeholder="e.g. Weekend algorithms study" maxLength={80} value={newRoomDisplayName} onChange={(e) => setNewRoomDisplayName(e.target.value)} className={`w-full p-3 ${isDark ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300 hover:border-blue-400"} rounded-lg border focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition duration-200`} />
                             </div>
                             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
                             <div className="flex flex-col space-y-4 pt-2">

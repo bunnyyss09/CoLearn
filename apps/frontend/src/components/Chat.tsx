@@ -16,14 +16,30 @@ interface ChatProps {
   userId: string;
   userName: string;
   IP_ADDRESS: string;
+  /** When false, incoming WS chat messages trigger onLiveChatMessage (for nav badge). */
+  panelActive?: boolean;
+  onLiveChatMessage?: () => void;
 }
 
-const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName, IP_ADDRESS }) => {
+const Chat: React.FC<ChatProps> = ({
+  socket,
+  chatId,
+  userId,
+  userName: _userName,
+  IP_ADDRESS,
+  panelActive = true,
+  onLiveChatMessage,
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const panelActiveRef = useRef(panelActive);
+  const onLiveChatMessageRef = useRef(onLiveChatMessage);
   const theme = useRecoilValue(themeAtom);
   const isDark = theme === "dark";
+
+  panelActiveRef.current = panelActive;
+  onLiveChatMessageRef.current = onLiveChatMessage;
 
   // Load chat history from backend
   useEffect(() => {
@@ -52,7 +68,10 @@ const Chat: React.FC<ChatProps> = ({ socket, chatId, userId, userName: _userName
           const data = JSON.parse(event.data);
           if (data.type === "chat" && data.chatMessage) {
             setMessages((prev) => [...prev, data.chatMessage]);
-            
+            if (!panelActiveRef.current) {
+              onLiveChatMessageRef.current?.();
+            }
+
             // Only save to backend if this is the sender's message
             // This prevents duplicate saves when multiple clients receive the broadcast
             if (data.chatMessage.userId === userId) {

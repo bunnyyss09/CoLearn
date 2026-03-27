@@ -26,6 +26,7 @@ interface LearningProfile {
 
 interface RoomDetails {
   roomId: string;
+  displayName?: string | null;
   ownerId: string;
   ownerName?: string;
   members: string[];
@@ -303,9 +304,14 @@ const Dashboard: React.FC = () => {
           <div className="flex items-start justify-between">
             <div>
               <h1 className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
-                Room {roomDetails.roomId}
+                {roomDetails.displayName?.trim() || `Room ${roomDetails.roomId}`}
               </h1>
-              <p className={`mt-1 flex items-center gap-2 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+              {roomDetails.displayName?.trim() && (
+                <p className={`mt-1 text-xs font-mono ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                  {roomDetails.roomId}
+                </p>
+              )}
+              <p className={`${roomDetails.displayName?.trim() ? "mt-2" : "mt-1"} flex items-center gap-2 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
                 <FiCalendar size={14} />
                 Created {createdDate}
               </p>

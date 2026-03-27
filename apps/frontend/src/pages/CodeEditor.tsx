@@ -9,6 +9,7 @@ import { socketAtom } from "../atoms/socketAtom";
 import { useNavigate, useParams } from "react-router-dom";
 import { connectedUsersAtom } from "../atoms/connectedUsersAtom";
 import { IP_ADDRESS } from "../Globle";
+import { adaptStarterCommentToLanguage } from "../utils/editorLanguagePlaceholders";
 import Chat from "../components/Chat";
 import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
@@ -94,9 +95,13 @@ const CodeEditor: React.FC = () => {
   // Learning room metadata (if this room has been upgraded to a module)
   const [_isLearningRoom, setIsLearningRoom] = useState<boolean>(false);
   const [_learningModuleId, setLearningModuleId] = useState<string | null>(null);
+  const [roomDisplayName, setRoomDisplayName] = useState<string | null>(null);
 
   // Sidebar panel state
   const [activePanel, setActivePanel] = useState<"ai" | "chat" | "info" | null>("ai");
+  const [aiPanelUnread, setAiPanelUnread] = useState(false);
+  const [chatPanelUnread, setChatPanelUnread] = useState(false);
+  const lastSeenAiCountRef = useRef(0);
 
   // Keep refs in sync with state to avoid stale closures in callbacks
   useEffect(() => { codeRef.current = code; }, [code]);
@@ -156,6 +161,8 @@ const CodeEditor: React.FC = () => {
           if (roomData.room) {
             setIsLearningRoom(!!roomData.room.isLearningRoom);
             setLearningModuleId(roomData.room.moduleId || null);
+            const dn = roomData.room.displayName;
+            setRoomDisplayName(typeof dn === "string" && dn.trim() ? dn.trim() : null);
           }
         }
 
@@ -166,8 +173,9 @@ const CodeEditor: React.FC = () => {
           const data = await dataResponse.json();
           
           // Load code and language from database (will be overridden by WebSocket sync if connected)
+          const loadedLang = data.language || "javascript";
           if (data.code !== undefined) {
-            setCode(data.code);
+            setCode(adaptStarterCommentToLanguage(data.code, loadedLang));
           }
           if (data.language) {
             setLanguage(data.language);
@@ -280,7 +288,10 @@ const CodeEditor: React.FC = () => {
           // Clear the flag after a short delay to allow state to settle
           setTimeout(() => { isRemoteUpdateRef.current = false; }, 50);
         }
-        if (data.type === "language") setLanguage(data.language);
+        if (data.type === "language") {
+          setCode((prev: string) => adaptStarterCommentToLanguage(prev, data.language));
+          setLanguage(data.language);
+        }
         if (data.type === "submitBtnStatus") {
           setCurrentButtonState(data.value);
           setIsLoading(data.isLoading);
@@ -312,7 +323,10 @@ const CodeEditor: React.FC = () => {
 
         if (data.type === "allData") {
           isRemoteUpdateRef.current = true;
-          setCode(data.code);
+          const syncLang = data.language || "javascript";
+          if (data.code !== undefined) {
+            setCode(adaptStarterCommentToLanguage(data.code, syncLang));
+          }
           setLanguage(data.language);
           setCurrentButtonState(data.currentButtonState);
           setIsLoading(data.isLoading);
@@ -343,6 +357,24 @@ const CodeEditor: React.FC = () => {
   useEffect(() => {
     aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [aiMessages]);
+
+  useEffect(() => {
+    if (activePanel === "ai") {
+      setAiPanelUnread(false);
+      lastSeenAiCountRef.current = aiMessages.length;
+      return;
+    }
+    if (aiMessages.length > lastSeenAiCountRef.current) {
+      setAiPanelUnread(true);
+    }
+    lastSeenAiCountRef.current = aiMessages.length;
+  }, [aiMessages, activePanel]);
+
+  useEffect(() => {
+    if (activePanel === "chat") {
+      setChatPanelUnread(false);
+    }
+  }, [activePanel]);
 
   const startIoResizeDrag = (event: React.MouseEvent<HTMLDivElement>) => {
     if (isIoCollapsed) return;
@@ -557,6 +589,8 @@ const CodeEditor: React.FC = () => {
                 userId={user.id}
                 userName={user.name}
                 IP_ADDRESS={IP_ADDRESS}
+                panelActive={activePanel === "chat"}
+                onLiveChatMessage={() => setChatPanelUnread(true)}
               />
             ) : (
               <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
@@ -702,9 +736,12 @@ const CodeEditor: React.FC = () => {
   };
 
   const handleLanguageChange = (value: string) => {
+    setCode((prev: string) => adaptStarterCommentToLanguage(prev, value));
     setLanguage(value);
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "language", language: value, roomId: user.roomId }));
-  }
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "language", language: value, roomId: user.roomId }));
+    }
+  };
 
   const handleButtonStatus = (value: string, isLoading: boolean) => {
     setCurrentButtonState(value);
@@ -828,20 +865,41 @@ const CodeEditor: React.FC = () => {
               {isSidebarOpen ? <FiChevronsLeft size={18} /> : <FiChevronsRight size={18} />}
             </button>
             <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>CoLearn Live</span>
-            <span className={`text-xs px-2 py-1 rounded-full ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}>Room {user.roomId || "..."}</span>
+            <span
+              className={`text-xs px-2 py-1 rounded-full max-w-[14rem] truncate ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}
+              title={user.roomId || params.roomId || undefined}
+            >
+              {roomDisplayName || `Room ${user.roomId || params.roomId || "..."}`}
+            </span>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <button
+              type="button"
               onClick={() => handlePanelToggle("ai")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
+              title={aiPanelUnread ? "New AI messages" : undefined}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
             >
               <FiBox /> AI Tutor
+              {aiPanelUnread && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
             </button>
             <button
+              type="button"
               onClick={() => handlePanelToggle("chat")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              title={chatPanelUnread ? "New chat messages" : undefined}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiMessageCircle /> Chat
+              {chatPanelUnread && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
             </button>
             <button
               onClick={() => handlePanelToggle("info")}

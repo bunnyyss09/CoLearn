@@ -97,6 +97,9 @@ const LearningRoom: React.FC = () => {
   const [connectedUsers, setConnectedUsers] =
     useRecoilState<any[]>(connectedUsersAtom);
   const [activePanel, setActivePanel] = useState<ActivePanel>("ai");
+  const [aiPanelUnread, setAiPanelUnread] = useState(false);
+  const [chatPanelUnread, setChatPanelUnread] = useState(false);
+  const lastSeenAiCountRef = useRef(0);
   const [chatId, setChatId] = useState<string>("");
   const theme = useRecoilValue(themeAtom);
   const isDark = theme === "dark";
@@ -127,6 +130,7 @@ const LearningRoom: React.FC = () => {
   const aiChatEndRef = useRef<HTMLDivElement>(null);
 
   const [chatReady, setChatReady] = useState(false);
+  const [roomDisplayName, setRoomDisplayName] = useState<string | null>(null);
   const [runInput, setRunInput] = useState("");
   const [runOutput, setRunOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -180,6 +184,24 @@ const LearningRoom: React.FC = () => {
     aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [aiMessages]);
 
+  useEffect(() => {
+    if (activePanel === "ai") {
+      setAiPanelUnread(false);
+      lastSeenAiCountRef.current = aiMessages.length;
+      return;
+    }
+    if (aiMessages.length > lastSeenAiCountRef.current) {
+      setAiPanelUnread(true);
+    }
+    lastSeenAiCountRef.current = aiMessages.length;
+  }, [aiMessages, activePanel]);
+
+  useEffect(() => {
+    if (activePanel === "chat") {
+      setChatPanelUnread(false);
+    }
+  }, [activePanel]);
+
 
   // Fetch learning state (module + per-user progress).
   // If the room is not yet a learning room, we automatically attach the
@@ -230,6 +252,10 @@ const LearningRoom: React.FC = () => {
           if (roomData.room && roomData.room.chatId) {
             setChatId(roomData.room.chatId);
             setChatReady(true);
+          }
+          if (roomData.room) {
+            const dn = roomData.room.displayName;
+            setRoomDisplayName(typeof dn === "string" && dn.trim() ? dn.trim() : null);
           }
         }
         const dataRes = await fetch(
@@ -665,7 +691,6 @@ const LearningRoom: React.FC = () => {
               {module.checkpoints.map((cp, index) => {
                 const isActive = index === currentCheckpointIndex;
                 const isPast = index < currentCheckpointIndex;
-                const isLocked = index > currentCheckpointIndex;
                 return (
                   <li
                     key={cp.checkpointId}
@@ -830,76 +855,122 @@ const LearningRoom: React.FC = () => {
           
           {!isIoCollapsed && (
             <div className={`p-3 border-t ${isDark ? "border-gray-800" : "border-blue-200"}`}>
-              {/* Tabs */}
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <div className="flex gap-1 flex-1 min-w-0 overflow-x-auto">
-                  <button
-                    onClick={() => setActiveIOTab("custom")}
-                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-md transition-all ${
-                      activeIOTab === "custom"
-                        ? "bg-blue-600 text-white shadow-md"
-                        : isDark ? "bg-gray-800 text-gray-400 hover:bg-gray-700" : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-                    }`}
-                  >
-                    Custom I/O
-                  </button>
-                  {currentCheckpoint?.testCases?.map((_, index) => {
-                    const result = testResult?.results?.[index];
-                    const passed = result?.passed;
-                    const ran = result !== undefined;
-                    return (
-                      <button
-                        key={`test-${index}`}
-                        onClick={() => setActiveIOTab(`test-${index}`)}
-                        className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-md transition-all flex items-center gap-1 ${
-                          activeIOTab === `test-${index}`
-                            ? "bg-blue-600 text-white shadow-md"
-                            : isDark ? "bg-gray-800 text-gray-400 hover:bg-gray-700" : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-                        }`}
-                      >
-                        Test {index + 1}
-                        {ran && (passed ? <FiCheck className="text-green-400" /> : <span className="text-red-400">✗</span>)}
-                      </button>
-                    );
-                  })}
-                </div>
-                {currentCheckpoint?.testCases && currentCheckpoint.testCases.length > 0 && (
-                  <button
-                    onClick={handleRunTests}
-                    disabled={isRunningTests}
-                    className="px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition-all shadow-md"
-                  >
-                    {isRunningTests && <AiOutlineLoading3Quarters className="animate-spin" />}
-                    Run All Tests
-                  </button>
-                )}
-              </div>
+              {(() => {
+                const ioTestCases = currentCheckpoint?.testCases;
+                const activeTestIdx =
+                  activeIOTab.startsWith("test-") && ioTestCases
+                    ? parseInt(activeIOTab.replace("test-", ""), 10)
+                    : -1;
+                const activeTestValid =
+                  activeTestIdx >= 0 && ioTestCases && activeTestIdx < ioTestCases.length;
+                const activeRunResult =
+                  activeTestValid && testResult?.results
+                    ? testResult.results[activeTestIdx]
+                    : undefined;
+                const activeHasRunResult = activeRunResult !== undefined;
+
+                return (
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <div className="flex gap-1 flex-1 min-w-0 overflow-x-auto">
+                        <button
+                          type="button"
+                          onClick={() => setActiveIOTab("custom")}
+                          className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-md transition-all ${
+                            activeIOTab === "custom"
+                              ? "bg-blue-600 text-white shadow-md"
+                              : isDark
+                                ? "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                          }`}
+                        >
+                          Custom I/O
+                        </button>
+                        {ioTestCases?.map((_, index) => {
+                          const result = testResult?.results?.[index];
+                          const passed = result?.passed;
+                          const ran = result !== undefined;
+                          return (
+                            <button
+                              type="button"
+                              key={`test-${index}`}
+                              onClick={() => setActiveIOTab(`test-${index}`)}
+                              className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-md transition-all flex items-center gap-1 ${
+                                activeIOTab === `test-${index}`
+                                  ? "bg-blue-600 text-white shadow-md"
+                                  : isDark
+                                    ? "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                              }`}
+                            >
+                              Test {index + 1}
+                              {ran && (passed ? <FiCheck className="text-green-400" /> : <span className="text-red-400">✗</span>)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+                        {activeIOTab === "custom" && (
+                          <button
+                            type="button"
+                            onClick={() => handleRunCodeForTab("custom")}
+                            disabled={isRunning}
+                            className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md"
+                          >
+                            {isRunning ? <AiOutlineLoading3Quarters className="animate-spin" size={14} /> : <FiPlay size={14} />}
+                            Run
+                          </button>
+                        )}
+                        {activeIOTab.startsWith("test-") && activeTestValid && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleRunCodeForTab(`test-${activeTestIdx}`)}
+                              disabled={isRunning}
+                              className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md"
+                            >
+                              {isRunning ? <AiOutlineLoading3Quarters className="animate-spin" size={14} /> : <FiPlay size={14} />}
+                              Run
+                            </button>
+                            {activeHasRunResult && (
+                              <span
+                                className={`text-xs font-semibold whitespace-nowrap ${activeRunResult?.passed ? "text-green-500" : "text-red-500"}`}
+                              >
+                                {activeRunResult?.passed ? "✓ Passed" : "✗ Failed"}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {ioTestCases && ioTestCases.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleRunTests}
+                            disabled={isRunningTests}
+                            className="px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition-all shadow-md"
+                          >
+                            {isRunningTests && <AiOutlineLoading3Quarters className="animate-spin" size={14} />}
+                            Run All Tests
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                );
+              })()}
 
               {/* Tab Content */}
               {activeIOTab === "custom" && (
-                <div className="flex gap-3 max-h-40">
-                  <div className="flex-1 flex flex-col gap-1">
+                <div className="flex gap-3 max-h-40 items-stretch">
+                  <div className="flex-1 flex flex-col gap-1 min-h-0">
                     <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Input</label>
                     <textarea
                       value={runInput}
                       onChange={(e) => setRunInput(e.target.value)}
                       placeholder="Enter input..."
-                      className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"} border w-full p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs flex-1 resize-none transition`}
+                      className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"} border w-full p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs flex-1 min-h-0 resize-none transition`}
                     />
                   </div>
-                  <div className="flex flex-col gap-1 items-center justify-center">
-                    <button
-                      onClick={() => handleRunCodeForTab("custom")}
-                      disabled={isRunning}
-                      className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md hover:shadow-lg"
-                    >
-                      {isRunning ? <AiOutlineLoading3Quarters className="animate-spin" /> : <FiPlay size={14} />}
-                      Run
-                    </button>
-                  </div>
-                  <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex-1 flex flex-col gap-1 min-h-0">
                     <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Output</label>
-                    <div className={`${isDark ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-300"} border text-green-600 p-2 rounded-md overflow-y-auto font-mono text-xs flex-1 transition`}>
+                    <div className={`${isDark ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-300"} border text-green-600 p-2 rounded-md overflow-y-auto font-mono text-xs flex-1 min-h-0 transition`}>
                       {runOutput.length > 0 ? runOutput.map((line, i) => <pre key={i} className="whitespace-pre-wrap">{normalizeForDisplay(line)}</pre>) : <p className={isDark ? "text-gray-500" : "text-gray-600"}>No output yet.</p>}
                     </div>
                   </div>
@@ -912,41 +983,25 @@ const LearningRoom: React.FC = () => {
                 if (!testCase) return null;
                 const testOutput = testCaseOutputs[testIndex] || [];
                 const runResult = testResult?.results?.[testIndex];
-                const passed = runResult?.passed;
                 const hasRunResult = runResult !== undefined;
 
                 return (
-                  <div className="flex gap-3 max-h-40">
-                    <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex gap-3 max-h-40 items-stretch">
+                    <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Input (read-only)</label>
-                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 overflow-y-auto ${isDark ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
+                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 min-h-0 overflow-y-auto ${isDark ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
                         {testCase.input || "(empty)"}
                       </pre>
                     </div>
-                    <div className="flex flex-col gap-1 items-center justify-center">
-                      <button
-                        onClick={() => handleRunCodeForTab(`test-${testIndex}`)}
-                        disabled={isRunning}
-                        className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md"
-                      >
-                        {isRunning ? <AiOutlineLoading3Quarters className="animate-spin" /> : <FiPlay size={14} />}
-                        Run
-                      </button>
-                      {hasRunResult && (
-                        <span className={`text-xs font-semibold ${passed ? "text-green-500" : "text-red-500"}`}>
-                          {passed ? "✓ Passed" : "✗ Failed"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 flex flex-col gap-1">
+                    <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Expected</label>
-                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 overflow-y-auto ${isDark ? "bg-green-900/30 border-green-800 text-green-300" : "bg-green-50 border-green-200 text-green-700"}`}>
+                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 min-h-0 overflow-y-auto ${isDark ? "bg-green-900/30 border-green-800 text-green-300" : "bg-green-50 border-green-200 text-green-700"}`}>
                         {normalizeForDisplay(testCase.expectedOutput)}
                       </pre>
                     </div>
-                    <div className="flex-1 flex flex-col gap-1">
+                    <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Actual</label>
-                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 overflow-y-auto ${isDark ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
+                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 min-h-0 overflow-y-auto ${isDark ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
                         {normalizeForDisplay(hasRunResult && runResult ? runResult.actualOutput : testOutput.join("\n")) || "(run to see output)"}
                       </pre>
                     </div>
@@ -1002,6 +1057,8 @@ const LearningRoom: React.FC = () => {
                 userId={user.id}
                 userName={user.name}
                 IP_ADDRESS={IP_ADDRESS}
+                panelActive={activePanel === "chat"}
+                onLiveChatMessage={() => setChatPanelUnread(true)}
               />
             ) : (
               <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
@@ -1184,22 +1241,38 @@ const LearningRoom: React.FC = () => {
             <div>
               <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>CoLearn</span>
               <span className={`text-xs px-2 py-1 rounded-full ml-2 ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}>
-                Module · {roomLabel}
+                Module · {roomDisplayName ? `${roomDisplayName} · ${roomLabel}` : roomLabel}
               </span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <button
+              type="button"
               onClick={() => setActivePanel("ai")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
+              title={aiPanelUnread ? "New AI messages" : undefined}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
             >
               <FiBox /> AI Guide
+              {aiPanelUnread && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
             </button>
             <button
+              type="button"
               onClick={() => setActivePanel("chat")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              title={chatPanelUnread ? "New chat messages" : undefined}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiMessageCircle /> Chat
+              {chatPanelUnread && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
             </button>
             <button
               onClick={() => setActivePanel("info")}

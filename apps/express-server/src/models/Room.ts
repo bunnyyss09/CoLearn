@@ -2,6 +2,8 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IRoom extends Document {
   roomId: string;
+  /** Optional friendly label (e.g. "Weekend study"); falls back to roomId in UI. */
+  displayName?: string;
   ownerId: string;
   members: string[];
   chatId: string;
@@ -23,6 +25,11 @@ const RoomSchema: Schema = new Schema(
       required: true,
       unique: true,
       trim: true,
+    },
+    displayName: {
+      type: String,
+      trim: true,
+      maxlength: 80,
     },
     ownerId: {
       type: String,

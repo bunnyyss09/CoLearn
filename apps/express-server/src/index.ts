@@ -25,6 +25,14 @@ import {
   getUserProfileData,
 } from "./utils/learningProfileService";
 
+const ROOM_DISPLAY_NAME_MAX = 80;
+
+function sanitizeRoomDisplayName(raw: unknown): string | undefined {
+  if (raw == null || typeof raw !== "string") return undefined;
+  const t = raw.trim().slice(0, ROOM_DISPLAY_NAME_MAX);
+  return t.length > 0 ? t : undefined;
+}
+
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -293,7 +301,8 @@ app.get("/chat/:chatId", async (req, res) => {
 
 // Room management endpoints
 app.post("/room/create", authenticateToken, async (req: AuthRequest, res) => {
-  const { roomId } = req.body;
+  const { roomId, displayName: displayNameRaw } = req.body;
+  const displayName = sanitizeRoomDisplayName(displayNameRaw);
 
   if (!roomId) {
     return res.status(400).json({ error: "Missing roomId" });
@@ -348,6 +357,7 @@ app.post("/room/create", authenticateToken, async (req: AuthRequest, res) => {
     // Create Room
     room = new Room({
       roomId,
+      ...(displayName ? { displayName } : {}),
       ownerId,
       members: [ownerId],
       chatId,
@@ -412,6 +422,7 @@ app.get("/rooms/my", authenticateToken, async (req: AuthRequest, res) => {
     // Include ownerId in response
     const roomsWithOwner = rooms.map(room => ({
       roomId: room.roomId,
+      displayName: room.displayName,
       ownerId: room.ownerId,
       members: room.members,
     }));
@@ -480,6 +491,7 @@ app.get("/room/:roomId/details", authenticateToken, async (req: AuthRequest, res
     res.status(200).json({
       room: {
         roomId: room.roomId,
+        displayName: room.displayName,
         ownerId: room.ownerId,
         ownerName,
         members: room.members,
@@ -531,6 +543,54 @@ app.delete("/room/:roomId", authenticateToken, async (req: AuthRequest, res) => 
   } catch (error) {
     console.error("Error deleting room:", error);
     res.status(500).json({ error: "Failed to delete room" });
+  }
+});
+
+// Update room display name (owner only)
+app.patch("/room/:roomId", authenticateToken, async (req: AuthRequest, res) => {
+  const { roomId } = req.params;
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(req.body, "displayName")) {
+    return res.status(400).json({ error: "Missing displayName" });
+  }
+  const { displayName: displayNameRaw } = req.body;
+  if (typeof displayNameRaw !== "string") {
+    return res.status(400).json({ error: "displayName must be a string" });
+  }
+
+  try {
+    const room = await Room.findOne({ roomId });
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+    if (room.ownerId !== req.user.userId) {
+      return res.status(403).json({ error: "Only the room owner can rename the room" });
+    }
+
+    const cleaned = sanitizeRoomDisplayName(displayNameRaw);
+
+    if (cleaned) {
+      room.displayName = cleaned;
+    } else {
+      room.set("displayName", undefined);
+    }
+    await room.save();
+
+    res.status(200).json({
+      room: {
+        roomId: room.roomId,
+        displayName: room.displayName,
+        ownerId: room.ownerId,
+        members: room.members,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating room:", error);
+    res.status(500).json({ error: "Failed to update room" });
   }
 });
 
