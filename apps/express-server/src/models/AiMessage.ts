@@ -4,6 +4,8 @@ export interface IAiMessage extends Document {
   roomId: string;
   sender: 'user' | 'ai';
   text: string;
+  /** Present when sender === 'user'; used for room activity stats. */
+  userId?: string;
   /**
    * Optional display name of the user who asked the question.
    * Present when sender === 'user'.
@@ -28,6 +30,12 @@ const AiMessageSchema: Schema = new Schema(
     text: {
       type: String,
       required: true,
+    },
+    userId: {
+      type: String,
+      required: false,
+      ref: "User",
+      index: true,
     },
     userName: {
       type: String,

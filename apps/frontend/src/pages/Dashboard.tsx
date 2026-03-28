@@ -9,7 +9,16 @@ import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
 import SettingsModal from "../components/SettingsModal";
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
-import { FiUsers, FiBook, FiCode, FiMessageCircle, FiCalendar, FiPlay } from "react-icons/fi";
+import {
+  FiUsers,
+  FiBook,
+  FiCode,
+  FiMessageCircle,
+  FiCalendar,
+  FiPlay,
+  FiBarChart2,
+  FiCpu,
+} from "react-icons/fi";
 
 interface LearningProfile {
   weaknesses: { category: string; description: string; occurrences: number }[];
@@ -40,6 +49,38 @@ interface RoomDetails {
   createdAt: string;
 }
 
+interface RoomContribution {
+  userId: string;
+  userName: string;
+  chatMessages: number;
+  aiQuestions: number;
+  activityScore: number;
+  contributionPercent: number;
+}
+
+interface RoomStats {
+  summary: {
+    totalChatMessages: number;
+    totalAiQuestions: number;
+    memberCount: number;
+    language: string;
+    lastActivityAt: string | null;
+    codeLastUpdatedAt: string | null;
+    hasLoggedActivity: boolean;
+  };
+  contributions: RoomContribution[];
+  weights: { chatMessage: number; aiQuestion: number };
+}
+
+const CONTRIBUTION_BAR_COLORS = [
+  "bg-blue-500",
+  "bg-indigo-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-cyan-500",
+];
+
 const Dashboard: React.FC = () => {
   const { roomId } = useParams<{ roomId?: string }>();
   const auth = useRecoilValue(authAtom);
@@ -58,6 +99,8 @@ const Dashboard: React.FC = () => {
   // Room details state
   const [roomDetails, setRoomDetails] = useState<RoomDetails | null>(null);
   const [loadingRoom, setLoadingRoom] = useState(false);
+  const [roomStats, setRoomStats] = useState<RoomStats | null>(null);
+  const [loadingRoomStats, setLoadingRoomStats] = useState(false);
 
   // Fetch user learning profile
   useEffect(() => {
@@ -102,6 +145,30 @@ const Dashboard: React.FC = () => {
         });
     } else {
       setRoomDetails(null);
+    }
+  }, [roomId, auth.token]);
+
+  useEffect(() => {
+    if (roomId && auth.token) {
+      setLoadingRoomStats(true);
+      fetch(`http://${IP_ADDRESS}:3000/room/${roomId}/stats`, {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.summary && Array.isArray(data.contributions)) {
+            setRoomStats(data as RoomStats);
+          } else {
+            setRoomStats(null);
+          }
+        })
+        .catch((err) => {
+          console.error("Error fetching room stats:", err);
+          setRoomStats(null);
+        })
+        .finally(() => setLoadingRoomStats(false));
+    } else {
+      setRoomStats(null);
     }
   }, [roomId, auth.token]);
 
@@ -407,6 +474,126 @@ const Dashboard: React.FC = () => {
                 <li>• Multi-language support</li>
               </ul>
             </div>
+          )}
+        </div>
+
+        {/* Room activity overview & contributions */}
+        <div className={`p-6 rounded-xl border ${isDark ? "bg-gray-900/80 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
+          <div className="flex items-center gap-2 mb-4">
+            <FiBarChart2 className={isDark ? "text-blue-400" : "text-blue-600"} size={22} />
+            <h2 className={`text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+              Room activity & contributions
+            </h2>
+          </div>
+          <p className={`text-sm mb-5 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+            Overview of collaboration in this room. Contribution % is based on{" "}
+            <strong>room chat messages</strong> and <strong>AI tutor questions</strong> (weighted more).
+            Shared code edits are not attributed per person yet.
+          </p>
+
+          {loadingRoomStats ? (
+            <div className="flex justify-center py-10">
+              <AiOutlineLoading3Quarters className="animate-spin text-blue-500" size={28} />
+            </div>
+          ) : roomStats ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <div className={`rounded-lg p-4 ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-blue-50/80 border border-blue-100"}`}>
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80">
+                    <FiMessageCircle size={14} />
+                    Chat
+                  </div>
+                  <p className={`text-2xl font-bold mt-1 ${isDark ? "text-white" : "text-gray-900"}`}>
+                    {roomStats.summary.totalChatMessages}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-500"}`}>messages</p>
+                </div>
+                <div className={`rounded-lg p-4 ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-violet-50/80 border border-violet-100"}`}>
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80">
+                    <FiCpu size={14} />
+                    AI tutor
+                  </div>
+                  <p className={`text-2xl font-bold mt-1 ${isDark ? "text-white" : "text-gray-900"}`}>
+                    {roomStats.summary.totalAiQuestions}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-500"}`}>questions asked</p>
+                </div>
+                <div className={`rounded-lg p-4 ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-emerald-50/80 border border-emerald-100"}`}>
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80">
+                    <FiCode size={14} />
+                    Language
+                  </div>
+                  <p className={`text-lg font-bold mt-1 capitalize ${isDark ? "text-white" : "text-gray-900"}`}>
+                    {roomStats.summary.language}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-500"}`}>editor</p>
+                </div>
+                <div className={`rounded-lg p-4 ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-amber-50/80 border border-amber-100"}`}>
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80">
+                    <FiCalendar size={14} />
+                    Last activity
+                  </div>
+                  <p className={`text-sm font-semibold mt-1 leading-snug ${isDark ? "text-white" : "text-gray-900"}`}>
+                    {roomStats.summary.lastActivityAt
+                      ? new Date(roomStats.summary.lastActivityAt).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "—"}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-500"}`}>chat or AI</p>
+                </div>
+              </div>
+
+              <h3 className={`text-sm font-semibold mb-3 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+                Member contribution
+              </h3>
+              {!roomStats.summary.hasLoggedActivity ? (
+                <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-600"}`}>
+                  No chat or AI tutor activity recorded yet. Open the room and start chatting or ask the AI tutor—stats
+                  will show up here.
+                </p>
+              ) : (
+                <ul className="space-y-4">
+                  {[...roomStats.contributions]
+                    .sort((a, b) => b.contributionPercent - a.contributionPercent)
+                    .map((c, idx) => (
+                      <li key={c.userId}>
+                        <div className="flex items-center justify-between gap-3 text-sm mb-1">
+                          <span className={`font-medium truncate ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+                            {c.userName}
+                            {c.userId === roomDetails.ownerId && (
+                              <span className={`ml-2 text-xs font-normal ${isDark ? "text-yellow-500/90" : "text-yellow-700"}`}>
+                                (owner)
+                              </span>
+                            )}
+                          </span>
+                          <span className={`shrink-0 font-semibold tabular-nums ${isDark ? "text-blue-300" : "text-blue-700"}`}>
+                            {c.contributionPercent}%
+                          </span>
+                        </div>
+                        <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-200"}`}>
+                          <div
+                            className={`h-full rounded-full transition-all ${CONTRIBUTION_BAR_COLORS[idx % CONTRIBUTION_BAR_COLORS.length]}`}
+                            style={{
+                              width: `${c.contributionPercent > 0 ? Math.max(c.contributionPercent, 3) : 0}%`,
+                            }}
+                          />
+                        </div>
+                        <p className={`text-xs mt-1 ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                          {c.chatMessages} chat · {c.aiQuestions} AI questions
+                        </p>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-600"}`}>
+              Could not load activity stats.
+            </p>
           )}
         </div>
 

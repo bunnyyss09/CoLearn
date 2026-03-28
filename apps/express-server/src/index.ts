@@ -1,8 +1,9 @@
 import { config } from "dotenv";
 import path from "path";
 
-// Load .env from project root
+// Load .env: monorepo root (from apps/express-server/src or dist) and cwd as fallback
 config({ path: path.resolve(__dirname, "../../../.env") });
+config({ path: path.resolve(process.cwd(), ".env") });
 import express from "express";
 import { createClient } from "redis";
 import cors from "cors";
@@ -166,23 +167,30 @@ app.post('/ai-tutor', async (req, res) => {
     moduleTitle,
     moduleSummary,
   } = req.body;
-  if (!userQuery || !language || !code) {
-      return res.status(400).json({ error: "Missing required fields: userQuery, language, or code." });
+  const query = typeof userQuery === "string" ? userQuery.trim() : "";
+  const lang = typeof language === "string" ? language.trim() : "";
+  const codeText = typeof code === "string" ? code : "";
+  if (!query || !lang) {
+    return res
+      .status(400)
+      .json({ error: "Missing required fields: userQuery or language." });
   }
   try {
-      // Get user learning context if userId is provided
+      // Get user learning context if userId is provided (never fail the tutor if profile DB hiccups)
       let userLearningContext = '';
-      if (userId) {
-        // Track this AI interaction for the user's learning profile
-        await recordAiInteraction(userId, userQuery, code);
-        // Get personalized context about the user's learning journey
-        userLearningContext = await getUserAiContext(userId);
+      if (userId != null && String(userId).trim() !== "") {
+        try {
+          await recordAiInteraction(String(userId), query, codeText);
+          userLearningContext = await getUserAiContext(String(userId));
+        } catch (profileErr) {
+          console.error("AI tutor: learning profile step failed (continuing without profile):", profileErr);
+        }
       }
 
       const aiResponseText = await getAiTutorResponse({
-        userQuery,
-        language,
-        code,
+        userQuery: query,
+        language: lang,
+        code: codeText,
         input: input ?? "",
         output: output ?? "",
         userName,
@@ -200,9 +208,10 @@ app.post('/ai-tutor', async (req, res) => {
         try {
           const userMessage = new AiMessage({
             roomId,
-            sender: 'user',
-            text: userQuery,
+            sender: "user",
+            text: query,
             userName: userName ?? undefined,
+            userId: userId ? String(userId) : undefined,
           });
           await userMessage.save();
 
@@ -222,7 +231,14 @@ app.post('/ai-tutor', async (req, res) => {
 
   } catch (error) {
       console.error("AI Tutor endpoint failed:", error);
-      res.status(500).json({ error: "An internal server error occurred while processing the AI request." });
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("GEMINI_API_KEY")) {
+        return res.status(503).json({ error: msg });
+      }
+      res.status(500).json({
+        error:
+          "An internal server error occurred while processing the AI request. Check the server logs for details.",
+      });
   }
 });
 
@@ -508,6 +524,140 @@ app.get("/room/:roomId/details", authenticateToken, async (req: AuthRequest, res
   } catch (error) {
     console.error("Error fetching room details:", error);
     res.status(500).json({ error: "Failed to fetch room details" });
+  }
+});
+
+/** Integer percentages that sum to 100 (largest remainder method). */
+function scoresToPercents(scores: number[]): number[] {
+  const total = scores.reduce((a, b) => a + b, 0);
+  if (total === 0) return scores.map(() => 0);
+  const exact = scores.map((s) => (100 * s) / total);
+  const floors = exact.map((x) => Math.floor(x));
+  let rem = 100 - floors.reduce((a, b) => a + b, 0);
+  const order = exact
+    .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < rem; k++) floors[order[k].i]++;
+  return floors;
+}
+
+// Room activity stats (chat + AI tutor attribution) for dashboard
+app.get("/room/:roomId/stats", authenticateToken, async (req: AuthRequest, res) => {
+  const { roomId } = req.params;
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const room = await Room.findOne({ roomId });
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+    if (!room.members.includes(req.user.userId)) {
+      return res.status(403).json({ error: "You are not a member of this room" });
+    }
+
+    const memberUsers = await User.find({ _id: { $in: room.members } })
+      .select("_id name")
+      .lean();
+    const idToName = new Map<string, string>(
+      memberUsers.map((u) => [String(u._id), u.name || String(u._id)])
+    );
+
+    const lowerNameToId = new Map<string, string>();
+    for (const u of memberUsers) {
+      const n = (u.name || "").trim().toLowerCase();
+      if (n) lowerNameToId.set(n, String(u._id));
+    }
+
+    const chatAgg = await ChatMessage.aggregate([
+      { $match: { chatId: room.chatId } },
+      { $group: { _id: "$userId", count: { $sum: 1 } } },
+    ]);
+    const chatByUser = new Map<string, number>();
+    for (const row of chatAgg) {
+      if (row._id) chatByUser.set(String(row._id), row.count);
+    }
+
+    const aiUserMsgs = await AiMessage.find({
+      roomId,
+      sender: "user",
+    })
+      .select("userId userName createdAt")
+      .lean();
+
+    const aiByUser = new Map<string, number>();
+    for (const m of aiUserMsgs) {
+      let uid: string | null = m.userId ? String(m.userId) : null;
+      if (!uid && m.userName) {
+        uid = lowerNameToId.get(m.userName.trim().toLowerCase()) || null;
+      }
+      if (uid && room.members.includes(uid)) {
+        aiByUser.set(uid, (aiByUser.get(uid) || 0) + 1);
+      }
+    }
+
+    const CHAT_W = 1;
+    const AI_W = 2;
+    const memberIds = [...room.members];
+    const scores = memberIds.map((mid) => {
+      const chat = chatByUser.get(String(mid)) || 0;
+      const ai = aiByUser.get(String(mid)) || 0;
+      return chat * CHAT_W + ai * AI_W;
+    });
+    const percents = scoresToPercents(scores);
+
+    const contributions = memberIds.map((mid, i) => ({
+      userId: mid,
+      userName: idToName.get(String(mid)) || mid,
+      chatMessages: chatByUser.get(String(mid)) || 0,
+      aiQuestions: aiByUser.get(String(mid)) || 0,
+      activityScore: scores[i],
+      contributionPercent: percents[i],
+    }));
+
+    const totalChat = chatAgg.reduce((s, r) => s + r.count, 0);
+
+    const lastChat = await ChatMessage.findOne({ chatId: room.chatId })
+      .sort({ timestamp: -1 })
+      .select("timestamp")
+      .lean();
+    const lastAi = await AiMessage.findOne({ roomId })
+      .sort({ createdAt: -1 })
+      .select("createdAt")
+      .lean();
+    let lastActivityAt: Date | null = null;
+    if (lastChat?.timestamp && lastAi?.createdAt) {
+      lastActivityAt =
+        new Date(lastChat.timestamp) > new Date(lastAi.createdAt)
+          ? new Date(lastChat.timestamp)
+          : new Date(lastAi.createdAt);
+    } else if (lastChat?.timestamp) {
+      lastActivityAt = new Date(lastChat.timestamp);
+    } else if (lastAi?.createdAt) {
+      lastActivityAt = new Date(lastAi.createdAt);
+    }
+
+    const codeDoc = await Code.findOne({ codeId: room.codeId })
+      .select("language updatedAt")
+      .lean();
+
+    res.status(200).json({
+      summary: {
+        totalChatMessages: totalChat,
+        totalAiQuestions: aiUserMsgs.length,
+        memberCount: room.members.length,
+        language: codeDoc?.language || "javascript",
+        lastActivityAt: lastActivityAt?.toISOString() ?? null,
+        codeLastUpdatedAt: codeDoc?.updatedAt?.toISOString() ?? null,
+        hasLoggedActivity: scores.some((s) => s > 0),
+      },
+      contributions,
+      weights: { chatMessage: CHAT_W, aiQuestion: AI_W },
+    });
+  } catch (error) {
+    console.error("Error fetching room stats:", error);
+    res.status(500).json({ error: "Failed to fetch room stats" });
   }
 });
 

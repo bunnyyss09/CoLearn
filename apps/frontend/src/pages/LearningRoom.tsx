@@ -119,7 +119,6 @@ const LearningRoom: React.FC = () => {
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [explanation, setExplanation] = useState("");
   const [reflection, setReflection] = useState("");
-  const [navError, setNavError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ allPassed: boolean; results?: Array<{ passed: boolean; expectedOutput: string; actualOutput: string }> } | null>(null);
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -301,7 +300,7 @@ const LearningRoom: React.FC = () => {
     setRunOutput([]);
     setTestCaseOutputs({});
     setActiveIOTab("custom");
-    setNavError(null);
+    setToast(null);
   }, [currentCheckpoint?.checkpointId]);
 
   // Save code whenever it changes (for the current checkpoint)
@@ -449,7 +448,6 @@ const LearningRoom: React.FC = () => {
     if (!roomIdFromUrl || !auth.token) return;
     setIsRunningTests(true);
     setTestResult(null);
-    setNavError(null);
     try {
       const res = await fetch(
         `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/run-tests`,
@@ -468,10 +466,11 @@ const LearningRoom: React.FC = () => {
         results: data.results,
       });
       if (!res.ok || !data.allPassed) {
-        setNavError(data.error || "Some tests failed.");
         setToast({
           type: "error",
-          message: "Some tests failed. Fix the code or ask the AI guide for help.",
+          message:
+            data.error ||
+            "Some tests did not pass. Fix the code or ask the AI guide for help.",
         });
       } else {
         setToast({
@@ -481,7 +480,6 @@ const LearningRoom: React.FC = () => {
       }
     } catch (e) {
       console.error("Run tests failed", e);
-      setNavError("Failed to run tests.");
       setToast({
         type: "error",
         message: "Failed to run tests. Please try again.",
@@ -540,10 +538,15 @@ const LearningRoom: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submission),
       });
+      const data = await res.json().catch(() => ({} as { error?: string; aiResponseText?: string }));
       if (!res.ok) {
-        throw new Error(`Server responded with status ${res.status}`);
+        throw new Error(
+          typeof data.error === "string" && data.error
+            ? data.error
+            : `Server error (${res.status})`
+        );
       }
-      const { aiResponseText } = await res.json();
+      const aiResponseText = data.aiResponseText;
       const aiMsg: AiMessage = { sender: "ai", text: aiResponseText || "No response." };
       setAiMessages((prev) => [...prev, aiMsg]);
       if (socket && socket.readyState === WebSocket.OPEN) {
@@ -551,9 +554,19 @@ const LearningRoom: React.FC = () => {
       }
     } catch (err) {
       console.error("AI tutor error", err);
+      const networkHint =
+        "Could not reach the API server. If you opened the app using your computer's LAN address (not localhost), the app will use that same host for the API—ensure the Express server is running and reachable on port 3000.";
+      const m = err instanceof Error ? err.message : "";
+      const looksLikeNetworkFailure =
+        err instanceof TypeError ||
+        m === "Failed to fetch" ||
+        m.includes("NetworkError") ||
+        m.includes("Load failed");
       const errMsg: AiMessage = {
         sender: "ai",
-        text: "Error connecting to the AI guide. Please try again.",
+        text: looksLikeNetworkFailure
+          ? networkHint
+          : m || "Error connecting to the AI guide. Please try again.",
       };
       setAiMessages((prev) => [...prev, errMsg]);
       if (socket && socket.readyState === WebSocket.OPEN) {
@@ -571,7 +584,6 @@ const LearningRoom: React.FC = () => {
   const handleAdvanceCheckpoint = async () => {
     if (!roomIdFromUrl) return;
     setIsAdvancing(true);
-    setNavError(null);
     try {
       const res = await fetch(
         `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/next`,
@@ -589,28 +601,32 @@ const LearningRoom: React.FC = () => {
         const nextIndex = data.room.currentCheckpointIndex;
         setCurrentCheckpointIndex(nextIndex);
         if (nextIndex === currentCheckpointIndex && module) {
-          setNavError(
-            `Already at the last checkpoint (${currentCheckpointIndex + 1}/${module.checkpoints.length}).`
-          );
+          setToast({
+            type: "error",
+            message: `Already at the last checkpoint (${currentCheckpointIndex + 1}/${module.checkpoints.length}).`,
+          });
         }
       } else if (!res.ok && data?.error) {
         if (data.results && !data.allPassed) {
-          const failed = data.results.filter((r: { passed: boolean }) => !r.passed);
-          setNavError(
-            `${data.error} Failed: ${failed.map((r: { input: string; actualOutput: string; expectedOutput: string }) =>
-              `expected "${r.expectedOutput}" got "${r.actualOutput}"`
-            ).join("; ")}`
-          );
+          setToast({
+            type: "error",
+            message:
+              data.error ||
+              "Some tests did not pass. Check the Input / Output panel for details.",
+          });
         } else {
-          setNavError(data.error || "Cannot advance checkpoint.");
+          setToast({
+            type: "error",
+            message: data.error || "Cannot advance checkpoint.",
+          });
         }
         console.warn("Cannot advance checkpoint:", data);
       } else if (!res.ok) {
-        setNavError("Cannot advance checkpoint.");
+        setToast({ type: "error", message: "Cannot advance checkpoint." });
       }
     } catch (e) {
       console.error("Failed to advance checkpoint", e);
-      setNavError("Failed to advance checkpoint.");
+      setToast({ type: "error", message: "Failed to advance checkpoint." });
     } finally {
       setIsAdvancing(false);
     }
@@ -821,12 +837,6 @@ const LearningRoom: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {navError && (
-          <div className={`rounded-lg border px-4 py-2 text-sm flex-shrink-0 ${isDark ? "bg-red-900/30 border-red-900 text-red-200" : "bg-red-50 border-red-200 text-red-700"}`}>
-            {navError}
-          </div>
-        )}
 
         {/* Code Editor */}
         <div className={`flex-1 border-2 rounded-lg overflow-hidden shadow-2xl transition-all duration-200 ${isDark ? "border-gray-800" : "border-gray-300 bg-gray-50"}`}>
@@ -1219,12 +1229,12 @@ const LearningRoom: React.FC = () => {
     >
       {/* Toast overlay */}
       {toast && (
-        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-start justify-end">
+        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-start justify-center pt-4 px-4">
           <div
-            className={`mt-4 mr-4 px-4 py-2 rounded-lg shadow-lg text-sm pointer-events-auto flex items-start gap-3 ${
+            className={`max-w-lg w-full sm:w-auto px-4 py-3 rounded-xl shadow-2xl border text-sm pointer-events-auto flex items-start gap-3 ${
               toast.type === "success"
-                ? "bg-green-600 text-white"
-                : "bg-red-600 text-white"
+                ? "bg-green-600 text-white border-green-500/80"
+                : "bg-red-600 text-white border-red-500/80"
             }`}
           >
             <span className="flex-1">{toast.message}</span>

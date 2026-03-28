@@ -755,11 +755,16 @@ const CodeEditor: React.FC = () => {
         body: JSON.stringify(aiSubmission),
       });
 
+      const data = await res.json().catch(() => ({} as { error?: string; aiResponseText?: string }));
       if (!res.ok) {
-        throw new Error(`Server responded with status: ${res.status}`);
+        throw new Error(
+          typeof data.error === "string" && data.error
+            ? data.error
+            : `Server error (${res.status})`
+        );
       }
 
-      const { aiResponseText } = await res.json();
+      const aiResponseText = data.aiResponseText;
       const aiMessage: AiMessage = {
         sender: 'ai',
         text: aiResponseText || "Sorry, I couldn't generate a response.",
@@ -775,7 +780,18 @@ const CodeEditor: React.FC = () => {
       }
     } catch (error) {
       console.error("Error communicating with AI service:", error);
-      setAiMessages(prev => [...prev, { sender: 'ai', text: "Error connecting to the AI assistant via the server." }]);
+      const networkHint =
+        "Could not reach the API server. If you use your machine's LAN URL in the browser, ensure the backend is running on port 3000 on that machine.";
+      const m = error instanceof Error ? error.message : "";
+      const looksLikeNetworkFailure =
+        error instanceof TypeError ||
+        m === "Failed to fetch" ||
+        m.includes("NetworkError") ||
+        m.includes("Load failed");
+      const text = looksLikeNetworkFailure
+        ? networkHint
+        : m || "Error connecting to the AI assistant via the server.";
+      setAiMessages(prev => [...prev, { sender: 'ai', text }]);
     } finally {
       setIsAiLoading(false);
     }
