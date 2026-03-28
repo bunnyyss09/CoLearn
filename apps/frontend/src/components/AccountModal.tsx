@@ -3,7 +3,8 @@ import { useRecoilValue } from "recoil";
 import { authAtom } from "../atoms/authAtom";
 import { themeAtom } from "../atoms/themeAtom";
 import { IP_ADDRESS } from "../Globle";
-import { AiOutlineLoading3Quarters } from "react-icons/ai";
+import { AiOutlineLoading3Quarters, AiOutlineClose } from "react-icons/ai";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface LearningProfile {
   weaknesses: { category: string; description: string; occurrences: number }[];
@@ -28,12 +29,11 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
   const theme = useRecoilValue(themeAtom);
   const user = auth.user;
   const isDark = theme === "dark";
-  
+
   const [profile, setProfile] = useState<LearningProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [activeTab, setActiveTab] = useState<"account" | "insights">("account");
 
-  // Handle Esc key to close modal
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isOpen) {
@@ -47,7 +47,6 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
     };
   }, [isOpen, onClose]);
 
-  // Fetch learning profile when insights tab is opened
   useEffect(() => {
     if (isOpen && activeTab === "insights" && user && auth.token && !profile) {
       setLoadingProfile(true);
@@ -67,24 +66,25 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
     }
   }, [isOpen, activeTab, user, auth.token]);
 
-  if (!isOpen) return null;
-
   const renderAccountTab = () => (
     <>
       {user ? (
-        <div className={`space-y-2 text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-          <p>
-            <span className={isDark ? "text-gray-400" : "text-gray-600"}>Name:</span> {user.name}
-          </p>
-          <p>
-            <span className={isDark ? "text-gray-400" : "text-gray-600"}>Email:</span> {user.email}
-          </p>
-          <p>
-            <span className={isDark ? "text-gray-400" : "text-gray-600"}>ID:</span> {user.id}
-          </p>
+        <div className={`space-y-3 text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+          <div className={`p-3 rounded-xl ${isDark ? "bg-surface-700/50" : "bg-surface-50"}`}>
+            <span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-500"}`}>Name</span>
+            <p className={`font-medium ${isDark ? "text-white" : "text-gray-900"}`}>{user.name}</p>
+          </div>
+          <div className={`p-3 rounded-xl ${isDark ? "bg-surface-700/50" : "bg-surface-50"}`}>
+            <span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-500"}`}>Email</span>
+            <p className={`font-medium ${isDark ? "text-white" : "text-gray-900"}`}>{user.email}</p>
+          </div>
+          <div className={`p-3 rounded-xl ${isDark ? "bg-surface-700/50" : "bg-surface-50"}`}>
+            <span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-500"}`}>ID</span>
+            <p className={`font-mono text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>{user.id}</p>
+          </div>
         </div>
       ) : (
-        <p className={isDark ? "text-gray-400" : "text-gray-600"} style={{ fontSize: '0.875rem' }}>Not signed in.</p>
+        <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>Not signed in.</p>
       )}
     </>
   );
@@ -97,7 +97,7 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
     if (loadingProfile) {
       return (
         <div className="flex items-center justify-center py-8">
-          <AiOutlineLoading3Quarters className="animate-spin text-blue-500" size={24} />
+          <AiOutlineLoading3Quarters className="animate-spin text-brand-400" size={24} />
         </div>
       );
     }
@@ -116,8 +116,7 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
 
     return (
       <div className="space-y-4 text-sm">
-        {/* Stats Overview */}
-        <div className={`grid grid-cols-3 gap-2 p-3 rounded-lg ${isDark ? "bg-gray-800" : "bg-white border border-gray-200"}`}>
+        <div className={`grid grid-cols-3 gap-2 p-3 rounded-xl ${isDark ? "bg-surface-700/50" : "bg-surface-50 border border-surface-200"}`}>
           <div className="text-center">
             <div className={`text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{profile.metrics.totalAiQuestions}</div>
             <div className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>AI Questions</div>
@@ -140,13 +139,12 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Areas to Improve */}
         {profile.weaknesses.length > 0 && (
           <div>
             <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
               Areas to Focus On
             </h4>
-            <div className={`space-y-1.5 p-3 rounded-lg ${isDark ? "bg-gray-800" : "bg-white border border-gray-200"}`}>
+            <div className={`space-y-1.5 p-3 rounded-xl ${isDark ? "bg-surface-700/50" : "bg-surface-50 border border-surface-200"}`}>
               {profile.weaknesses.slice(0, 4).map((w, i) => (
                 <div key={i} className="flex items-center justify-between">
                   <span className={isDark ? "text-gray-300" : "text-gray-700"}>
@@ -162,7 +160,6 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
           </div>
         )}
 
-        {/* Topics Asked About */}
         {profile.metrics.topTopics.length > 0 && (
           <div>
             <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
@@ -170,7 +167,7 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
             </h4>
             <div className="flex flex-wrap gap-1.5">
               {profile.metrics.topTopics.map((t, i) => (
-                <span key={i} className={`px-2 py-1 rounded-full text-xs ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                <span key={i} className={`px-2 py-1 rounded-full text-xs ${isDark ? "bg-brand-900/50 text-brand-300" : "bg-brand-100 text-brand-700"}`}>
                   {t.topic} ({t.count})
                 </span>
               ))}
@@ -178,59 +175,77 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
           </div>
         )}
 
-        {/* Encouragement */}
         <div className={`text-xs italic ${isDark ? "text-gray-500" : "text-gray-500"}`}>
-          💡 The AI tutor uses this info to help you better!
+          The AI tutor uses this info to help you better!
         </div>
       </div>
     );
   };
 
   return (
-    <div className={`fixed inset-0 z-50 ${isDark ? "bg-black/50" : "bg-gray-900/50"} flex items-center justify-center p-4`}>
-      <div className={`${isDark ? "bg-gray-900 border-gray-700" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-xl shadow-2xl w-full max-w-md p-6 transition-all duration-200`}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-            {activeTab === "account" ? "Account" : "Learning Insights"}
-          </h2>
-          <button
-            onClick={onClose}
-            className={`${isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"} text-sm`}
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className={`${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-surface-200"} border rounded-2xl shadow-2xl w-full max-w-md relative overflow-hidden`}
           >
-            Close
-          </button>
-        </div>
+            {/* Gradient top accent */}
+            <div className="h-1 bg-gradient-brand" />
 
-        {/* Tab Switcher */}
-        <div className={`flex mb-4 p-1 rounded-lg ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-          <button
-            onClick={() => setActiveTab("account")}
-            className={`flex-1 py-1.5 text-sm rounded-md transition-all ${
-              activeTab === "account"
-                ? "bg-blue-600 text-white"
-                : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Account
-          </button>
-          <button
-            onClick={() => setActiveTab("insights")}
-            className={`flex-1 py-1.5 text-sm rounded-md transition-all ${
-              activeTab === "insights"
-                ? "bg-blue-600 text-white"
-                : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Learning Insights
-          </button>
-        </div>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className={`text-lg font-display font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+                  {activeTab === "account" ? "Account" : "Learning Insights"}
+                </h2>
+                <button
+                  onClick={onClose}
+                  className={`${isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"} p-1 rounded-lg hover:bg-surface-700/50 transition-colors`}
+                >
+                  <AiOutlineClose size={18} />
+                </button>
+              </div>
 
-        {activeTab === "account" ? renderAccountTab() : renderInsightsTab()}
-      </div>
-    </div>
+              {/* Tab Switcher */}
+              <div className={`flex mb-5 p-1 rounded-xl ${isDark ? "bg-surface-700/50" : "bg-surface-100"}`}>
+                <button
+                  onClick={() => setActiveTab("account")}
+                  className={`flex-1 py-2 text-sm rounded-lg font-medium transition-all ${
+                    activeTab === "account"
+                      ? "bg-brand-600 text-white shadow-lg shadow-brand-600/30"
+                      : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Account
+                </button>
+                <button
+                  onClick={() => setActiveTab("insights")}
+                  className={`flex-1 py-2 text-sm rounded-lg font-medium transition-all ${
+                    activeTab === "insights"
+                      ? "bg-brand-600 text-white shadow-lg shadow-brand-600/30"
+                      : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Learning Insights
+                </button>
+              </div>
+
+              {activeTab === "account" ? renderAccountTab() : renderInsightsTab()}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 
 export default AccountModal;
-
-
