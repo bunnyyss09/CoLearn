@@ -1,4 +1,4 @@
-import UserLearningProfile, { IUserLearningProfile } from '../models/UserLearningProfile';
+import UserLearningProfile from '../models/UserLearningProfile';
 
 /**
  * Error categories for classification
@@ -295,4 +295,100 @@ export async function getUserProfileData(userId: string): Promise<{
     console.error('Error getting user profile data:', error);
     return null;
   }
+}
+
+/** Codes for teacher-facing check-in suggestions (room owner only). */
+export type TeachingCheckInHintCode =
+  | 'slow_pace'
+  | 'low_test_pass_rate'
+  | 'low_room_engagement'
+  | 'frequent_help_seeking';
+
+export interface LearnerTeachingRow {
+  userId: string;
+  userName: string;
+  learningPace: string;
+  testPassRatePercent: number | null;
+  testsRunTotal: number;
+  topFocusCategory: string | null;
+  lifetimeAiQuestions: number;
+  roomChatMessages: number;
+  roomAiQuestions: number;
+  suggestCheckIn: boolean;
+  checkInHints: TeachingCheckInHintCode[];
+}
+
+/**
+ * Build per-learner teaching signals for everyone in a learning room.
+ * Uses global learning profile + this room's chat/AI activity only.
+ */
+export async function buildLearnerTeachingRows(
+  memberIds: string[],
+  idToName: Map<string, string>,
+  activity: {
+    chatByUser: Map<string, number>;
+    aiByUser: Map<string, number>;
+    anyMemberActivity: boolean;
+  }
+): Promise<LearnerTeachingRow[]> {
+  const rows: LearnerTeachingRow[] = [];
+  const multiMember = memberIds.length > 1;
+
+  for (const userId of memberIds) {
+    const profile = await UserLearningProfile.findOne({ userId }).lean();
+    const fails = profile?.metrics?.totalTestFailures ?? 0;
+    const passes = profile?.metrics?.totalTestPasses ?? 0;
+    const testsTotal = fails + passes;
+    const passRate =
+      testsTotal > 0 ? Math.round((100 * passes) / testsTotal) : null;
+
+    let topCat: string | null = null;
+    const weaknesses = profile?.weaknesses as
+      | { category: string; occurrences: number }[]
+      | undefined;
+    if (weaknesses?.length) {
+      const sorted = [...weaknesses].sort(
+        (a, b) => b.occurrences - a.occurrences
+      );
+      topCat = sorted[0]?.category ?? null;
+    }
+
+    const pace = profile?.learningPace ?? 'unknown';
+    const lifetimeAi = profile?.metrics?.totalAiQuestions ?? 0;
+    const roomChat = activity.chatByUser.get(String(userId)) || 0;
+    const roomAi = activity.aiByUser.get(String(userId)) || 0;
+
+    const hints: TeachingCheckInHintCode[] = [];
+    if (pace === 'slow') hints.push('slow_pace');
+    if (testsTotal >= 3 && passRate !== null && passRate < 50) {
+      hints.push('low_test_pass_rate');
+    }
+    if (
+      multiMember &&
+      activity.anyMemberActivity &&
+      roomChat === 0 &&
+      roomAi === 0
+    ) {
+      hints.push('low_room_engagement');
+    }
+    if (roomAi >= 6 && passRate !== null && passRate < 60 && testsTotal >= 2) {
+      hints.push('frequent_help_seeking');
+    }
+
+    rows.push({
+      userId,
+      userName: idToName.get(String(userId)) || userId,
+      learningPace: pace,
+      testPassRatePercent: passRate,
+      testsRunTotal: testsTotal,
+      topFocusCategory: topCat,
+      lifetimeAiQuestions: lifetimeAi,
+      roomChatMessages: roomChat,
+      roomAiQuestions: roomAi,
+      suggestCheckIn: hints.length > 0,
+      checkInHints: hints,
+    });
+  }
+
+  return rows;
 }

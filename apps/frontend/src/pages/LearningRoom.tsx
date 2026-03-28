@@ -27,6 +27,8 @@ import {
   FiPlay,
   FiCheck,
   FiHash,
+  FiHeart,
+  FiBook,
 } from "react-icons/fi";
 import { AiOutlineSend, AiOutlineLoading3Quarters, AiOutlineCopy, AiOutlineCheck } from "react-icons/ai";
 
@@ -141,7 +143,11 @@ const LearningRoom: React.FC = () => {
   const [isCheckpointsCollapsed, setIsCheckpointsCollapsed] = useState(false);
   const [isIoCollapsed, setIsIoCollapsed] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  
+  const [roomOwnerId, setRoomOwnerId] = useState<string | null>(null);
+  const [cohortMemberCount, setCohortMemberCount] = useState(0);
+  /** Supportive coach strip: slow pace or struggling tests (from your profile only). */
+  const [coachKind, setCoachKind] = useState<"slow" | "tests" | null>(null);
+
   // Debounce timer for code sync
   const codeSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Flag to prevent echo when receiving remote code
@@ -163,8 +169,11 @@ const LearningRoom: React.FC = () => {
     setIsSidebarOpen(false);
   }, []);
 
+  const isModuleComplete =
+    !!module && currentCheckpointIndex >= module.checkpoints.length;
+
   const currentCheckpoint: Checkpoint | undefined =
-    module?.checkpoints[currentCheckpointIndex];
+    isModuleComplete ? undefined : module?.checkpoints[currentCheckpointIndex];
 
   const currentAiMode: AiMode = currentCheckpoint?.aiMode;
 
@@ -234,6 +243,12 @@ const LearningRoom: React.FC = () => {
         if (data.room?.currentCheckpointIndex != null) {
           setCurrentCheckpointIndex(data.room.currentCheckpointIndex);
         }
+        if (data.room?.ownerId != null) {
+          setRoomOwnerId(String(data.room.ownerId));
+        }
+        if (Array.isArray(data.room?.members)) {
+          setCohortMemberCount(data.room.members.length);
+        }
         if (data.progress) {
           setProgress({
             currentCheckpointIndex:
@@ -261,15 +276,29 @@ const LearningRoom: React.FC = () => {
           `http://${IP_ADDRESS}:3000/room/${roomIdFromUrl}/data`
         );
         if (dataRes.ok) {
-          const data = await dataRes.json();
-          if (data.aiMessages && Array.isArray(data.aiMessages)) {
+          const roomPayload = await dataRes.json();
+          if (roomPayload.aiMessages && Array.isArray(roomPayload.aiMessages)) {
             setAiMessages(
-              data.aiMessages.map((m: { sender: string; text: string; userName?: string }) => ({
+              roomPayload.aiMessages.map((m: { sender: string; text: string; userName?: string }) => ({
                 sender: m.sender as "user" | "ai",
                 text: m.text,
                 userName: m.userName,
               }))
             );
+          }
+          // Seed current checkpoint from shared room code (one blob per room) so return visits match the editor.
+          const mod = data.module as LearningModule | undefined;
+          const rawIdx = data.room?.currentCheckpointIndex ?? 0;
+          if (mod?.checkpoints?.length && rawIdx < mod.checkpoints.length) {
+            const cp = mod.checkpoints[rawIdx];
+            const src = roomPayload.code;
+            const placeholder =
+              typeof src === "string" &&
+              (src.includes("Write your code here") || src.trim() === "// Write your code here...");
+            if (typeof src === "string" && cp?.checkpointId && !placeholder) {
+              setCode(src);
+              setCodeByCheckpoint((prev) => ({ ...prev, [cp.checkpointId]: src }));
+            }
           }
         }
       } catch (e) {
@@ -278,6 +307,44 @@ const LearningRoom: React.FC = () => {
     };
     fetchLearningState();
   }, [auth.token, roomIdFromUrl]);
+
+  const coachStorageKey =
+    roomIdFromUrl != null && roomIdFromUrl !== ""
+      ? `colearn-encourage-dismiss-${roomIdFromUrl}`
+      : null;
+
+  useEffect(() => {
+    setCoachKind(null);
+  }, [roomIdFromUrl]);
+
+  useEffect(() => {
+    if (!auth.token || !user.id || !roomIdFromUrl || !coachStorageKey) return;
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(coachStorageKey) === "1") {
+      return;
+    }
+    let cancelled = false;
+    fetch(`http://${IP_ADDRESS}:3000/learning-profile/${user.id}`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const p = data.profile;
+        if (!p) return;
+        const pace = p.learningPace as string | undefined;
+        const tp = p.metrics?.totalTestPasses ?? 0;
+        const tf = p.metrics?.totalTestFailures ?? 0;
+        const total = tp + tf;
+        const rate = total > 0 ? (100 * tp) / total : null;
+        if (pace === "slow") setCoachKind("slow");
+        else if (total >= 3 && rate !== null && rate < 50) setCoachKind("tests");
+        else setCoachKind(null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.token, user.id, roomIdFromUrl, coachStorageKey]);
 
   // Apply starter code when checkpoint changes; preserve code if we've seen this checkpoint before
   useEffect(() => {
@@ -303,12 +370,16 @@ const LearningRoom: React.FC = () => {
     setToast(null);
   }, [currentCheckpoint?.checkpointId]);
 
-  // Save code whenever it changes (for the current checkpoint)
+  // Save code whenever it changes for whichever checkpoint is currently active.
+  // Do NOT depend on checkpoint id here: when the checkpoint changes, the first render still
+  // has the previous checkpoint's code — syncing [code, checkpointId] would write that code
+  // into the new checkpoint's slot and wipe the correct saved code when you go back (Prev).
   useEffect(() => {
     if (!currentCheckpoint) return;
     const checkpointId = currentCheckpoint.checkpointId;
-    setCodeByCheckpoint(prev => ({ ...prev, [checkpointId]: code }));
-  }, [code, currentCheckpoint?.checkpointId]);
+    setCodeByCheckpoint((prev) => ({ ...prev, [checkpointId]: code }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- omit checkpointId so we don't copy old code into the new checkpoint slot on navigation
+  }, [code]);
 
   // Ensure there is a WebSocket connection for this room and
   // wire up basic listeners for users / code sync.
@@ -599,12 +670,17 @@ const LearningRoom: React.FC = () => {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.room?.currentCheckpointIndex != null) {
         const nextIndex = data.room.currentCheckpointIndex;
-        setCurrentCheckpointIndex(nextIndex);
-        if (nextIndex === currentCheckpointIndex && module) {
-          setToast({
-            type: "error",
-            message: `Already at the last checkpoint (${currentCheckpointIndex + 1}/${module.checkpoints.length}).`,
-          });
+        const leaving = currentCheckpoint;
+        if (leaving) {
+          setCodeByCheckpoint((prev) => ({
+            ...prev,
+            [leaving.checkpointId]: code,
+          }));
+        }
+        if (data.room.moduleCompleted && roomIdFromUrl) {
+          navigate(`/code/${roomIdFromUrl}`, { replace: true });
+        } else {
+          setCurrentCheckpointIndex(nextIndex);
         }
       } else if (!res.ok && data?.error) {
         if (data.results && !data.allPassed) {
@@ -666,9 +742,12 @@ const LearningRoom: React.FC = () => {
 
   const renderCheckpointList = () => {
     if (!module) return null;
-    const completedCount = currentCheckpointIndex;
     const totalCount = module.checkpoints.length;
-    const progressPercent = Math.round((completedCount / totalCount) * 100);
+    const completedCount = Math.min(currentCheckpointIndex, totalCount);
+    const progressPercent =
+      totalCount > 0
+        ? Math.round((completedCount / totalCount) * 100)
+        : 0;
     
     return (
       <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-lg"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
@@ -705,8 +784,10 @@ const LearningRoom: React.FC = () => {
             
             <ul className="space-y-1.5">
               {module.checkpoints.map((cp, index) => {
-                const isActive = index === currentCheckpointIndex;
-                const isPast = index < currentCheckpointIndex;
+                const isActive =
+                  !isModuleComplete && index === currentCheckpointIndex;
+                const isPast =
+                  isModuleComplete || index < currentCheckpointIndex;
                 return (
                   <li
                     key={cp.checkpointId}
@@ -749,6 +830,64 @@ const LearningRoom: React.FC = () => {
   };
 
   const renderCenterPanel = () => {
+    if (!module) {
+      return (
+        <div className={`flex-1 flex items-center justify-center rounded-lg border ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"}`}>
+          <p className={isDark ? "text-gray-400" : "text-gray-600"}>Loading module...</p>
+        </div>
+      );
+    }
+
+    if (isModuleComplete) {
+      return (
+        <div className="flex flex-col h-full gap-3 min-h-0">
+          <div
+            className={`flex-1 flex flex-col items-center justify-center text-center rounded-xl border-2 p-8 gap-4 ${isDark ? "bg-gray-900 border-green-800/80" : "bg-green-50 border-green-200"}`}
+          >
+            <div className={`rounded-full p-4 ${isDark ? "bg-green-900/40" : "bg-green-100"}`}>
+              <FiCheck className="text-green-500" size={40} aria-hidden />
+            </div>
+            <div>
+              <h2 className={`text-xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+                Module complete
+              </h2>
+              <p className={`mt-2 text-sm max-w-md ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                You finished all checkpoints in <strong>{module.title}</strong>. You can review the last step, open the collaboration editor, or view the room dashboard.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <button
+                type="button"
+                onClick={handlePreviousCheckpoint}
+                disabled={isAdvancing}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border ${isDark ? "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700" : "bg-white border-gray-300 text-gray-800 hover:bg-gray-50"} disabled:opacity-40`}
+              >
+                ← Review last checkpoint
+              </button>
+              {roomIdFromUrl && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/code/${roomIdFromUrl}`)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Open collaboration editor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dashboard/${roomIdFromUrl}`)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${isDark ? "border-gray-600 text-gray-200 hover:bg-gray-800" : "border-gray-300 text-gray-800 hover:bg-gray-100"}`}
+                  >
+                    Room dashboard
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (!currentCheckpoint) {
       return (
         <div className={`flex-1 flex items-center justify-center rounded-lg border ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"}`}>
@@ -757,7 +896,13 @@ const LearningRoom: React.FC = () => {
       );
     }
 
-    const isNextDisabled = isAdvancing;
+    const lastCheckpointIndex = module.checkpoints.length - 1;
+    const isLastCheckpoint = currentCheckpointIndex === lastCheckpointIndex;
+    const lastHasTests = (currentCheckpoint.testCases?.length ?? 0) > 0;
+    const lastStepReady = !lastHasTests || testResult?.allPassed === true;
+    const primaryAdvanceDisabled =
+      isAdvancing || (isLastCheckpoint && !lastStepReady);
+
     const isPrevDisabled = isAdvancing || currentCheckpointIndex === 0;
 
     const handleRunCodeForTab = async (tabId: string) => {
@@ -828,11 +973,16 @@ const LearningRoom: React.FC = () => {
               </button>
               <button
                 onClick={handleAdvanceCheckpoint}
-                disabled={isNextDisabled}
+                disabled={primaryAdvanceDisabled}
+                title={
+                  isLastCheckpoint && !lastStepReady && lastHasTests
+                    ? "Run all tests and pass them to finish this module."
+                    : undefined
+                }
                 className="px-4 py-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1 transition-all shadow-md hover:shadow-lg"
               >
                 {isAdvancing && <AiOutlineLoading3Quarters className="animate-spin" />}
-                Next →
+                {isLastCheckpoint ? "Finish" : "Next →"}
               </button>
             </div>
           </div>
@@ -1139,6 +1289,23 @@ const LearningRoom: React.FC = () => {
                 </button>
               </div>
             </div>
+            {roomOwnerId && user.id === roomOwnerId && (
+              <div className={`rounded-lg border p-3 ${isDark ? "bg-indigo-950/40 border-indigo-800" : "bg-indigo-50 border-indigo-200"}`}>
+                <h3 className={`text-sm font-semibold mb-1 flex items-center gap-2 ${isDark ? "text-indigo-200" : "text-indigo-900"}`}>
+                  <FiBook size={16} /> Facilitating this module?
+                </h3>
+                <p className={`text-xs mb-2 ${isDark ? "text-indigo-300/90" : "text-indigo-800/90"}`}>
+                  Open the room dashboard for class-wide participation stats and gentle “who might need a check-in” signals (no grades).
+                </p>
+                <button
+                  type="button"
+                  onClick={() => roomIdFromUrl && navigate(`/dashboard/${roomIdFromUrl}`)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  Open teaching dashboard
+                </button>
+              </div>
+            )}
           </div>
         </div>
         </div>
@@ -1314,6 +1481,39 @@ const LearningRoom: React.FC = () => {
             </button>
           </div>
         </nav>
+
+        {coachKind && coachStorageKey && typeof sessionStorage !== "undefined" && sessionStorage.getItem(coachStorageKey) !== "1" && (
+          <div
+            className={`flex-shrink-0 flex items-start gap-3 rounded-xl border px-4 py-3 ${isDark ? "bg-amber-950/50 border-amber-800 text-amber-100" : "bg-amber-50 border-amber-200 text-amber-950"}`}
+            role="status"
+          >
+            <FiHeart className="shrink-0 mt-0.5 text-amber-500" size={20} aria-hidden />
+            <div className="flex-1 min-w-0 text-sm leading-relaxed">
+              <p className="font-semibold mb-1">You’ve got this</p>
+              {coachKind === "slow" ? (
+                <p>
+                  Your practice history suggests a steadier pace — that is normal. Use the AI Guide for hints, take breaks, and use room chat if others are online.
+                  {cohortMemberCount > 1 && " Everyone progresses differently; focus on understanding, not speed."}
+                </p>
+              ) : (
+                <p>
+                  Recent tests have been challenging — that usually means you are stretching. Try one small change at a time and ask the AI for a hint (not the full answer) first.
+                  {connectedUsers.length > 0 && " A classmate is online — pairing can help."}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (coachStorageKey) sessionStorage.setItem(coachStorageKey, "1");
+                setCoachKind(null);
+              }}
+              className={`shrink-0 text-xs font-semibold underline ${isDark ? "text-amber-300" : "text-amber-800"}`}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Main Content - Flex Layout */}
         <div className="flex flex-1 gap-4 overflow-hidden flex-col lg:flex-row">

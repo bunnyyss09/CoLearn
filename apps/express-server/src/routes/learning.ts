@@ -283,6 +283,9 @@ router.post("/room/:roomId/run-tests", authenticateToken, async (req: AuthReques
     if (!module) return res.status(404).json({ error: "Module not found for room" });
 
     const currentIndex = room.currentCheckpointIndex ?? 0;
+    if (currentIndex >= module.checkpoints.length) {
+      return res.status(400).json({ error: "This module is already completed." });
+    }
     const checkpoint = module.checkpoints[currentIndex];
     if (!checkpoint) return res.status(400).json({ error: "No current checkpoint" });
 
@@ -499,7 +502,12 @@ router.post("/room/:roomId/next", authenticateToken, async (req: AuthRequest, re
     if (!module) return res.status(404).json({ error: "Module not found for room" });
 
     const currentIndex = room.currentCheckpointIndex ?? 0;
-    if (currentIndex >= module.checkpoints.length) {
+    const lastCheckpointIndex = module.checkpoints.length - 1;
+
+    if (module.checkpoints.length === 0) {
+      return res.status(400).json({ error: "This module has no checkpoints." });
+    }
+    if (currentIndex > lastCheckpointIndex) {
       return res.status(400).json({ error: "Module already completed" });
     }
 
@@ -522,13 +530,25 @@ router.post("/room/:roomId/next", authenticateToken, async (req: AuthRequest, re
       }
     }
 
-    room.currentCheckpointIndex = Math.min(currentIndex + 1, module.checkpoints.length - 1);
+    // Advance to next checkpoint, or set index to checkpoints.length when finishing the last one.
+    if (currentIndex === lastCheckpointIndex) {
+      room.currentCheckpointIndex = module.checkpoints.length;
+    } else {
+      room.currentCheckpointIndex = currentIndex + 1;
+    }
     await room.save();
     await LearningProgress.updateMany(
       { roomId: room.roomId, moduleId: module.moduleId },
       { $set: { currentCheckpointIndex: room.currentCheckpointIndex } }
     );
-    res.status(200).json({ room: { roomId: room.roomId, currentCheckpointIndex: room.currentCheckpointIndex } });
+    const moduleCompleted = room.currentCheckpointIndex >= module.checkpoints.length;
+    res.status(200).json({
+      room: {
+        roomId: room.roomId,
+        currentCheckpointIndex: room.currentCheckpointIndex,
+        moduleCompleted,
+      },
+    });
   } catch (error) {
     console.error("Error advancing to next checkpoint:", error);
     res.status(500).json({ error: "Failed to advance checkpoint" });
@@ -548,9 +568,18 @@ router.post("/room/:roomId/previous", authenticateToken, async (req: AuthRequest
     if (!module) return res.status(404).json({ error: "Module not found for room" });
 
     const currentIndex = room.currentCheckpointIndex ?? 0;
-    if (currentIndex <= 0) return res.status(400).json({ error: "Already at the first checkpoint" });
+    const lastCheckpointIndex = module.checkpoints.length - 1;
 
-    room.currentCheckpointIndex = currentIndex - 1;
+    if (currentIndex <= 0) {
+      return res.status(400).json({ error: "Already at the first checkpoint" });
+    }
+
+    // From "module completed" state, go back to the last checkpoint.
+    if (currentIndex > lastCheckpointIndex) {
+      room.currentCheckpointIndex = lastCheckpointIndex;
+    } else {
+      room.currentCheckpointIndex = currentIndex - 1;
+    }
     await room.save();
     await LearningProgress.updateMany(
       { roomId: room.roomId, moduleId: module.moduleId },

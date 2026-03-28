@@ -24,7 +24,9 @@ import {
   recordAiInteraction,
   getUserAiContext,
   getUserProfileData,
+  buildLearnerTeachingRows,
 } from "./utils/learningProfileService";
+import { aggregateRoomMemberActivity } from "./utils/roomActivity";
 
 const ROOM_DISPLAY_NAME_MAX = 80;
 
@@ -557,45 +559,8 @@ app.get("/room/:roomId/stats", authenticateToken, async (req: AuthRequest, res) 
       return res.status(403).json({ error: "You are not a member of this room" });
     }
 
-    const memberUsers = await User.find({ _id: { $in: room.members } })
-      .select("_id name")
-      .lean();
-    const idToName = new Map<string, string>(
-      memberUsers.map((u) => [String(u._id), u.name || String(u._id)])
-    );
-
-    const lowerNameToId = new Map<string, string>();
-    for (const u of memberUsers) {
-      const n = (u.name || "").trim().toLowerCase();
-      if (n) lowerNameToId.set(n, String(u._id));
-    }
-
-    const chatAgg = await ChatMessage.aggregate([
-      { $match: { chatId: room.chatId } },
-      { $group: { _id: "$userId", count: { $sum: 1 } } },
-    ]);
-    const chatByUser = new Map<string, number>();
-    for (const row of chatAgg) {
-      if (row._id) chatByUser.set(String(row._id), row.count);
-    }
-
-    const aiUserMsgs = await AiMessage.find({
-      roomId,
-      sender: "user",
-    })
-      .select("userId userName createdAt")
-      .lean();
-
-    const aiByUser = new Map<string, number>();
-    for (const m of aiUserMsgs) {
-      let uid: string | null = m.userId ? String(m.userId) : null;
-      if (!uid && m.userName) {
-        uid = lowerNameToId.get(m.userName.trim().toLowerCase()) || null;
-      }
-      if (uid && room.members.includes(uid)) {
-        aiByUser.set(uid, (aiByUser.get(uid) || 0) + 1);
-      }
-    }
+    const activity = await aggregateRoomMemberActivity(room);
+    const { idToName, chatByUser, aiByUser } = activity;
 
     const CHAT_W = 1;
     const AI_W = 2;
@@ -616,39 +581,17 @@ app.get("/room/:roomId/stats", authenticateToken, async (req: AuthRequest, res) 
       contributionPercent: percents[i],
     }));
 
-    const totalChat = chatAgg.reduce((s, r) => s + r.count, 0);
-
-    const lastChat = await ChatMessage.findOne({ chatId: room.chatId })
-      .sort({ timestamp: -1 })
-      .select("timestamp")
-      .lean();
-    const lastAi = await AiMessage.findOne({ roomId })
-      .sort({ createdAt: -1 })
-      .select("createdAt")
-      .lean();
-    let lastActivityAt: Date | null = null;
-    if (lastChat?.timestamp && lastAi?.createdAt) {
-      lastActivityAt =
-        new Date(lastChat.timestamp) > new Date(lastAi.createdAt)
-          ? new Date(lastChat.timestamp)
-          : new Date(lastAi.createdAt);
-    } else if (lastChat?.timestamp) {
-      lastActivityAt = new Date(lastChat.timestamp);
-    } else if (lastAi?.createdAt) {
-      lastActivityAt = new Date(lastAi.createdAt);
-    }
-
     const codeDoc = await Code.findOne({ codeId: room.codeId })
       .select("language updatedAt")
       .lean();
 
     res.status(200).json({
       summary: {
-        totalChatMessages: totalChat,
-        totalAiQuestions: aiUserMsgs.length,
+        totalChatMessages: activity.totalChatMessages,
+        totalAiQuestions: activity.totalAiUserMessages,
         memberCount: room.members.length,
         language: codeDoc?.language || "javascript",
-        lastActivityAt: lastActivityAt?.toISOString() ?? null,
+        lastActivityAt: activity.lastActivityAt?.toISOString() ?? null,
         codeLastUpdatedAt: codeDoc?.updatedAt?.toISOString() ?? null,
         hasLoggedActivity: scores.some((s) => s > 0),
       },
@@ -660,6 +603,79 @@ app.get("/room/:roomId/stats", authenticateToken, async (req: AuthRequest, res) 
     res.status(500).json({ error: "Failed to fetch room stats" });
   }
 });
+
+// Teaching cohort view: room owner only, learning rooms only. Supportive signals for check-ins — not grades.
+app.get(
+  "/room/:roomId/teaching-insights",
+  authenticateToken,
+  async (req: AuthRequest, res) => {
+    const { roomId } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const room = await Room.findOne({ roomId });
+      if (!room) {
+        return res.status(404).json({ error: "Room not found" });
+      }
+      if (room.ownerId !== req.user.userId) {
+        return res
+          .status(403)
+          .json({ error: "Only the room owner can view teaching insights." });
+      }
+      if (!room.isLearningRoom) {
+        return res.status(400).json({
+          error: "Teaching insights are only available for learning rooms.",
+        });
+      }
+
+      const activity = await aggregateRoomMemberActivity(room);
+      const learners = await buildLearnerTeachingRows(
+        [...room.members],
+        activity.idToName,
+        {
+          chatByUser: activity.chatByUser,
+          aiByUser: activity.aiByUser,
+          anyMemberActivity: activity.anyMemberActivity,
+        }
+      );
+
+      const checkInSuggestedCount = learners.filter((l) => l.suggestCheckIn)
+        .length;
+
+      let sharedCheckpointIndex = room.currentCheckpointIndex ?? 0;
+      let moduleCompleted = false;
+      if (room.moduleId) {
+        const mod = await LearningModule.findOne({ moduleId: room.moduleId })
+          .select("checkpoints")
+          .lean();
+        const n = mod?.checkpoints?.length ?? 0;
+        if (n > 0) {
+          const raw = room.currentCheckpointIndex ?? 0;
+          moduleCompleted = raw >= n;
+          sharedCheckpointIndex = Math.min(raw, n - 1);
+        }
+      }
+
+      res.status(200).json({
+        disclaimer:
+          "These are automated, privacy-preserving signals (no raw answers or code). Use them for supportive check-ins, not grading.",
+        sharedCheckpointIndex,
+        moduleCompleted,
+        summary: {
+          memberCount: room.members.length,
+          checkInSuggestedCount,
+          anyRoomActivity: activity.anyMemberActivity,
+        },
+        learners,
+      });
+    } catch (error) {
+      console.error("Error fetching teaching insights:", error);
+      res.status(500).json({ error: "Failed to fetch teaching insights" });
+    }
+  }
+);
 
 // Delete a room (only owner can delete)
 app.delete("/room/:roomId", authenticateToken, async (req: AuthRequest, res) => {

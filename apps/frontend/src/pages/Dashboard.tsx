@@ -18,6 +18,7 @@ import {
   FiPlay,
   FiBarChart2,
   FiCpu,
+  FiHeart,
 } from "react-icons/fi";
 
 interface LearningProfile {
@@ -72,6 +73,49 @@ interface RoomStats {
   weights: { chatMessage: number; aiQuestion: number };
 }
 
+type TeachingCheckInHint =
+  | "slow_pace"
+  | "low_test_pass_rate"
+  | "low_room_engagement"
+  | "frequent_help_seeking";
+
+interface TeachingLearnerRow {
+  userId: string;
+  userName: string;
+  learningPace: string;
+  testPassRatePercent: number | null;
+  testsRunTotal: number;
+  topFocusCategory: string | null;
+  lifetimeAiQuestions: number;
+  roomChatMessages: number;
+  roomAiQuestions: number;
+  suggestCheckIn: boolean;
+  checkInHints: TeachingCheckInHint[];
+}
+
+interface TeachingInsights {
+  disclaimer: string;
+  sharedCheckpointIndex: number;
+  moduleCompleted?: boolean;
+  summary: {
+    memberCount: number;
+    checkInSuggestedCount: number;
+    anyRoomActivity: boolean;
+  };
+  learners: TeachingLearnerRow[];
+}
+
+const TEACHING_HINT_COPY: Record<TeachingCheckInHint, string> = {
+  slow_pace:
+    "Learning pace flagged as slower — a short encouraging check-in can help.",
+  low_test_pass_rate:
+    "Several recorded test runs below 50% pass rate.",
+  low_room_engagement:
+    "Almost no chat or AI use in this room while others are active.",
+  frequent_help_seeking:
+    "Many AI questions with mixed tests — extra scaffolding may help.",
+};
+
 const CONTRIBUTION_BAR_COLORS = [
   "bg-blue-500",
   "bg-indigo-500",
@@ -101,6 +145,8 @@ const Dashboard: React.FC = () => {
   const [loadingRoom, setLoadingRoom] = useState(false);
   const [roomStats, setRoomStats] = useState<RoomStats | null>(null);
   const [loadingRoomStats, setLoadingRoomStats] = useState(false);
+  const [teachingInsights, setTeachingInsights] = useState<TeachingInsights | null>(null);
+  const [loadingTeaching, setLoadingTeaching] = useState(false);
 
   // Fetch user learning profile
   useEffect(() => {
@@ -171,6 +217,29 @@ const Dashboard: React.FC = () => {
       setRoomStats(null);
     }
   }, [roomId, auth.token]);
+
+  useEffect(() => {
+    if (
+      !roomId ||
+      !auth.token ||
+      !roomDetails?.isLearningRoom ||
+      roomDetails.ownerId !== auth.user?.id
+    ) {
+      setTeachingInsights(null);
+      return;
+    }
+    setLoadingTeaching(true);
+    fetch(`http://${IP_ADDRESS}:3000/room/${roomId}/teaching-insights`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((data: TeachingInsights) => {
+        if (data.learners && Array.isArray(data.learners)) setTeachingInsights(data);
+        else setTeachingInsights(null);
+      })
+      .catch(() => setTeachingInsights(null))
+      .finally(() => setLoadingTeaching(false));
+  }, [roomId, auth.token, roomDetails?.isLearningRoom, roomDetails?.ownerId, auth.user?.id]);
 
   const handleEnterRoom = () => {
     if (!roomDetails) return;
@@ -337,6 +406,10 @@ const Dashboard: React.FC = () => {
         <div className={`p-4 rounded-lg ${isDark ? "bg-gray-800/50 border-gray-700" : "bg-blue-50 border-blue-200"} border text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>
           💡 <strong>Tip:</strong> Select a room from the sidebar to start coding, or create a new room to begin a fresh session!
         </div>
+
+        <div className={`p-4 rounded-lg ${isDark ? "bg-indigo-950/40 border-indigo-900/50" : "bg-indigo-50 border-indigo-200"} border text-sm ${isDark ? "text-indigo-200/90" : "text-indigo-900/90"}`}>
+          <strong className="font-semibold">For instructors:</strong> After students join a <strong>learning room</strong>, open that room from the sidebar and use <strong>Class insights</strong> on the dashboard for participation signals and supportive check-in ideas — not grades.
+        </div>
       </div>
     );
   };
@@ -437,22 +510,32 @@ const Dashboard: React.FC = () => {
                   {roomDetails.moduleDescription && (
                     <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>{roomDetails.moduleDescription}</p>
                   )}
-                  {roomDetails.totalCheckpoints && (
+                  {roomDetails.totalCheckpoints && (() => {
+                    const totalCp = roomDetails.totalCheckpoints;
+                    const rawIdx = roomDetails.currentCheckpointIndex ?? 0;
+                    const moduleDoneLearn = rawIdx >= totalCp;
+                    const progressPct = moduleDoneLearn
+                      ? 100
+                      : Math.min(100, ((rawIdx + 1) / totalCp) * 100);
+                    return (
                     <div className="mt-3">
                       <div className="flex items-center justify-between text-sm mb-1">
                         <span className={isDark ? "text-gray-400" : "text-gray-600"}>Progress</span>
                         <span className={isDark ? "text-gray-300" : "text-gray-700"}>
-                          {(roomDetails.currentCheckpointIndex || 0) + 1} / {roomDetails.totalCheckpoints} checkpoints
+                          {moduleDoneLearn
+                            ? `Complete (${totalCp}/${totalCp} checkpoints)`
+                            : `${rawIdx + 1} / ${totalCp} checkpoints`}
                         </span>
                       </div>
                       <div className={`h-2 rounded-full ${isDark ? "bg-gray-700" : "bg-gray-200"}`}>
                         <div 
                           className="h-full rounded-full bg-green-500 transition-all"
-                          style={{ width: `${((roomDetails.currentCheckpointIndex || 0) + 1) / roomDetails.totalCheckpoints * 100}%` }}
+                          style={{ width: `${progressPct}%` }}
                         />
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ) : (
                 <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-500"}`}>No module selected yet.</p>
@@ -596,6 +679,103 @@ const Dashboard: React.FC = () => {
             </p>
           )}
         </div>
+
+        {/* Teaching insights — learning room owners only */}
+        {roomDetails.isLearningRoom && auth.user?.id === roomDetails.ownerId && (
+          <div
+            className={`p-6 rounded-xl border ${isDark ? "bg-gray-900/90 border-amber-900/50" : "bg-amber-50/90 border-amber-200 shadow-sm"}`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <FiHeart className={isDark ? "text-amber-400" : "text-amber-700"} size={22} />
+              <h2 className={`text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+                Class insights (for instructors)
+              </h2>
+            </div>
+            <p className={`text-xs mb-4 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+              Supportive signals from participation and practice history — not grades. Use for check-ins and grouping, not ranking.
+            </p>
+            {loadingTeaching ? (
+              <div className="flex justify-center py-8">
+                <AiOutlineLoading3Quarters className="animate-spin text-amber-500" size={28} />
+              </div>
+            ) : teachingInsights ? (
+              <>
+                <p className={`text-xs mb-4 italic ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                  {teachingInsights.disclaimer}
+                </p>
+                <div className="flex flex-wrap gap-3 mb-4 text-sm">
+                  {teachingInsights.moduleCompleted && (
+                    <span
+                      className={`px-3 py-1 rounded-full font-medium ${isDark ? "bg-green-900/50 text-green-300" : "bg-green-100 text-green-800 border border-green-200"}`}
+                    >
+                      Module completed for this room
+                    </span>
+                  )}
+                  <span
+                    className={`px-3 py-1 rounded-full ${isDark ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800 border border-amber-200"}`}
+                  >
+                    Shared checkpoint: {teachingInsights.moduleCompleted ? "final" : teachingInsights.sharedCheckpointIndex + 1}
+                  </span>
+                  <span
+                    className={`px-3 py-1 rounded-full ${isDark ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800 border border-amber-200"}`}
+                  >
+                    Check-in suggested: {teachingInsights.summary.checkInSuggestedCount} /{" "}
+                    {teachingInsights.summary.memberCount}
+                  </span>
+                </div>
+                <ul className="space-y-3">
+                  {teachingInsights.learners.map((L) => (
+                    <li
+                      key={L.userId}
+                      className={`rounded-lg border p-4 ${isDark ? "bg-gray-800/80 border-gray-700" : "bg-white border-amber-100"}`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <span className={`font-semibold ${isDark ? "text-gray-100" : "text-gray-900"}`}>
+                          {L.userName}
+                        </span>
+                        {L.suggestCheckIn && (
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? "bg-amber-900/60 text-amber-200" : "bg-amber-200 text-amber-900"}`}
+                          >
+                            Consider a check-in
+                          </span>
+                        )}
+                      </div>
+                      <div className={`flex flex-wrap gap-x-4 gap-y-1 text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                        <span className="capitalize">Pace: {L.learningPace}</span>
+                        <span>
+                          Tests:{" "}
+                          {L.testPassRatePercent !== null
+                            ? `${L.testPassRatePercent}% pass (${L.testsRunTotal} runs)`
+                            : L.testsRunTotal > 0
+                              ? `${L.testsRunTotal} runs`
+                              : "no data yet"}
+                        </span>
+                        <span>
+                          This room: {L.roomChatMessages} chat · {L.roomAiQuestions} AI
+                        </span>
+                        {L.topFocusCategory && (
+                          <span className="capitalize">Focus area: {L.topFocusCategory}</span>
+                        )}
+                      </div>
+                      {L.checkInHints.length > 0 && (
+                        <ul className={`mt-2 text-xs space-y-1 list-disc list-inside ${isDark ? "text-amber-200/90" : "text-amber-900/90"}`}>
+                          {L.checkInHints.map((h) => (
+                            <li key={h}>{TEACHING_HINT_COPY[h]}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-600"}`}>
+                Could not load teaching insights.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Enter Room Button */}
         <button

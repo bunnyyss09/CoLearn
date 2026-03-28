@@ -4,7 +4,7 @@ import { userAtom } from "../atoms/userAtom";
 import { authAtom } from "../atoms/authAtom";
 import { useRecoilState, useRecoilValue } from "recoil";
 import { AiOutlineLoading3Quarters, AiOutlineSend, AiOutlineCopy, AiOutlineCheck } from "react-icons/ai"; // Import icons
-import { FiMessageCircle, FiUsers, FiHash, FiBox, FiChevronsLeft, FiChevronsRight, FiChevronDown } from "react-icons/fi";
+import { FiMessageCircle, FiUsers, FiHash, FiBox, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiHeart } from "react-icons/fi";
 import {
   SiCplusplus,
   SiGo,
@@ -126,6 +126,10 @@ const CodeEditor: React.FC = () => {
   const [aiPanelUnread, setAiPanelUnread] = useState(false);
   const [chatPanelUnread, setChatPanelUnread] = useState(false);
   const lastSeenAiCountRef = useRef(0);
+  const codeRoomId = user.roomId || params.roomId || "";
+  const [collabCoachKind, setCollabCoachKind] = useState<"slow" | "tests" | null>(null);
+  const collabCoachKey =
+    codeRoomId !== "" ? `colearn-encourage-dismiss-editor-${codeRoomId}` : null;
 
   // Keep refs in sync with state to avoid stale closures in callbacks
   useEffect(() => { codeRef.current = code; }, [code]);
@@ -217,6 +221,39 @@ const CodeEditor: React.FC = () => {
 
     fetchRoomData();
   }, [user.roomId, params.roomId, IP_ADDRESS]);
+
+  useEffect(() => {
+    setCollabCoachKind(null);
+  }, [codeRoomId]);
+
+  useEffect(() => {
+    const token = auth.token;
+    const uid = auth.user?.id || user.id;
+    if (!token || !uid || !codeRoomId || !collabCoachKey) return;
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) === "1") return;
+    let cancelled = false;
+    fetch(`http://${IP_ADDRESS}:3000/learning-profile/${uid}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const p = data.profile;
+        if (!p) return;
+        const pace = p.learningPace as string | undefined;
+        const tp = p.metrics?.totalTestPasses ?? 0;
+        const tf = p.metrics?.totalTestFailures ?? 0;
+        const total = tp + tf;
+        const rate = total > 0 ? (100 * tp) / total : null;
+        if (pace === "slow") setCollabCoachKind("slow");
+        else if (total >= 3 && rate !== null && rate < 50) setCollabCoachKind("tests");
+        else setCollabCoachKind(null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.token, auth.user?.id, user.id, codeRoomId, collabCoachKey]);
 
   // WebSocket connection logic
   useEffect(() => {
@@ -1083,6 +1120,37 @@ const CodeEditor: React.FC = () => {
             </button> */}
           </div>
         </nav>
+
+        {collabCoachKind && collabCoachKey && typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) !== "1" && (
+          <div
+            className={`flex-shrink-0 flex items-start gap-3 rounded-xl border px-4 py-3 ${isDark ? "bg-amber-950/50 border-amber-800 text-amber-100" : "bg-amber-50 border-amber-200 text-amber-950"}`}
+            role="status"
+          >
+            <FiHeart className="shrink-0 mt-0.5 text-amber-500" size={20} aria-hidden />
+            <div className="flex-1 min-w-0 text-sm leading-relaxed">
+              <p className="font-semibold mb-1">You’ve got this</p>
+              {collabCoachKind === "slow" ? (
+                <p>
+                  Your learning profile suggests taking a steady pace — that is a strength. Use the AI tutor and chat when you need them.
+                </p>
+              ) : (
+                <p>
+                  Practice tests have been tough lately — try smaller steps and ask the AI for hints. {connectedUsers.length > 0 ? "Someone else is in the room if you want to collaborate." : ""}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (collabCoachKey) sessionStorage.setItem(collabCoachKey, "1");
+                setCollabCoachKind(null);
+              }}
+              className={`shrink-0 text-xs font-semibold underline ${isDark ? "text-amber-300" : "text-amber-800"}`}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         <div className="flex flex-1 gap-4 overflow-hidden flex-col lg:flex-row">
           <div className="flex flex-col flex-1 overflow-hidden">
