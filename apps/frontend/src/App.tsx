@@ -1,68 +1,96 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { RecoilRoot } from 'recoil';
+import { Routes, Route, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import Register from "./pages/Register";
 import CodeEditor from "./pages/CodeEditor";
 import LearningRoom from "./pages/LearningRoom";
 import ChooseModule from "./pages/ChooseModule";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRouter from "./middleWare/ProtectedRouter";
+import ScrollProgress from "./components/ScrollProgress";
+import PageTransition from "./components/animations/PageTransition";
 
 const App = () => {
+  const location = useLocation();
+
   return (
-    // Wrap the entire application with RecoilRoot to enable Recoil state management
-    <RecoilRoot>
-      <Router>
-        <Routes>
+    <>
+      <ScrollProgress />
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
           {/* Dashboard - shows user profile or room details */}
           <Route
             path="/dashboard"
             element={
-              <ProtectedRouter>
-                <Dashboard />
-              </ProtectedRouter>
+              <PageTransition>
+                <ProtectedRouter>
+                  <Dashboard />
+                </ProtectedRouter>
+              </PageTransition>
             }
           />
           <Route
             path="/dashboard/:roomId"
             element={
-              <ProtectedRouter>
-                <Dashboard />
-              </ProtectedRouter>
+              <PageTransition>
+                <ProtectedRouter>
+                  <Dashboard />
+                </ProtectedRouter>
+              </PageTransition>
             }
           />
 
           {/* The protected route for your existing code editor component */}
-          <Route 
-            path="/code/:roomId" 
+          <Route
+            path="/code/:roomId"
             element={
-              <ProtectedRouter>
-                <CodeEditor />
-              </ProtectedRouter>
-            } 
+              <PageTransition>
+                <ProtectedRouter>
+                  <CodeEditor />
+                </ProtectedRouter>
+              </PageTransition>
+            }
           />
           <Route
             path="/learn/:roomId/choose"
             element={
-              <ProtectedRouter>
-                <ChooseModule />
-              </ProtectedRouter>
+              <PageTransition>
+                <ProtectedRouter>
+                  <ChooseModule />
+                </ProtectedRouter>
+              </PageTransition>
             }
           />
           <Route
             path="/learn/:roomId"
             element={
-              <ProtectedRouter>
-                <LearningRoom />
-              </ProtectedRouter>
+              <PageTransition>
+                <ProtectedRouter>
+                  <LearningRoom />
+                </ProtectedRouter>
+              </PageTransition>
             }
           />
 
           {/* Catch-all for room IDs - must be AFTER specific routes */}
-          <Route path="/:roomId" element={<Register />} />
-          <Route path="/" element={<Register />} />
+          <Route
+            path="/:roomId"
+            element={
+              <PageTransition>
+                <Register />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/"
+            element={
+              <PageTransition>
+                <Register />
+              </PageTransition>
+            }
+          />
         </Routes>
-      </Router>
-    </RecoilRoot>
+      </AnimatePresence>
+    </>
   );
 };
 

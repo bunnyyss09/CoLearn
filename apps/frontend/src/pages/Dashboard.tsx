@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useRecoilValue } from "recoil";
 import { useNavigate, useParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { authAtom } from "../atoms/authAtom";
 import { themeAtom } from "../atoms/themeAtom";
 import { sidebarOpenAtom } from "../atoms/sidebarAtom";
@@ -8,6 +9,8 @@ import { IP_ADDRESS } from "../Globle";
 import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
 import SettingsModal from "../components/SettingsModal";
+import FadeIn from "../components/animations/FadeIn";
+import StaggerContainer, { StaggerItem } from "../components/animations/StaggerContainer";
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
 import {
   FiUsers,
@@ -117,9 +120,9 @@ const TEACHING_HINT_COPY: Record<TeachingCheckInHint, string> = {
 };
 
 const CONTRIBUTION_BAR_COLORS = [
-  "bg-blue-500",
-  "bg-indigo-500",
-  "bg-emerald-500",
+  "bg-brand-500",
+  "bg-brand-400",
+  "bg-accent-500",
   "bg-amber-500",
   "bg-rose-500",
   "bg-cyan-500",
@@ -254,7 +257,7 @@ const Dashboard: React.FC = () => {
     if (loadingProfile) {
       return (
         <div className="flex items-center justify-center py-20">
-          <AiOutlineLoading3Quarters className="animate-spin text-blue-500" size={32} />
+          <AiOutlineLoading3Quarters className="animate-spin text-brand-400" size={32} />
         </div>
       );
     }
@@ -266,21 +269,24 @@ const Dashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         {/* Welcome Header */}
-        <div className={`p-6 rounded-xl ${isDark ? "bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-gray-700" : "bg-gradient-to-r from-blue-100 to-purple-100 border-blue-200"} border`}>
-          <h1 className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+        <FadeIn>
+        <div className={`p-6 rounded-2xl ${isDark ? "bg-gradient-to-r from-brand-900/50 to-brand-800/50 border-surface-700" : "bg-gradient-to-r from-brand-100 to-brand-50 border-brand-200"} border`}>
+          <h1 className={`text-2xl font-bold font-display ${isDark ? "text-white" : "text-gray-900"}`}>
             Welcome back, {auth.user?.name || "Learner"}!
           </h1>
           <p className={`mt-2 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
             Ready to continue your coding journey? Select a room from the sidebar or check your progress below.
           </p>
         </div>
+        </FadeIn>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+        <StaggerContainer className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StaggerItem>
+          <div className={`p-4 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${isDark ? "bg-blue-900/50" : "bg-blue-100"}`}>
-                <FiMessageCircle className="text-blue-500" size={20} />
+              <div className={`p-2 rounded-lg ${isDark ? "bg-brand-900/50" : "bg-brand-100"}`}>
+                <FiMessageCircle className="text-brand-400" size={20} />
               </div>
               <div>
                 <p className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -290,8 +296,10 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+          </StaggerItem>
 
-          <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <StaggerItem>
+          <div className={`p-4 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${passRate !== null && passRate >= 70 ? "bg-green-900/50" : "bg-yellow-900/50"}`}>
                 <FiCode className={passRate !== null && passRate >= 70 ? "text-green-500" : "text-yellow-500"} size={20} />
@@ -304,8 +312,10 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+          </StaggerItem>
 
-          <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <StaggerItem>
+          <div className={`p-4 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${isDark ? "bg-green-900/50" : "bg-green-100"}`}>
                 <FiBook className="text-green-500" size={20} />
@@ -318,11 +328,13 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+          </StaggerItem>
 
-          <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <StaggerItem>
+          <div className={`p-4 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${isDark ? "bg-purple-900/50" : "bg-purple-100"}`}>
-                <FiPlay className="text-purple-500" size={20} />
+              <div className={`p-2 rounded-lg ${isDark ? "bg-brand-800/50" : "bg-brand-100"}`}>
+                <FiPlay className="text-brand-400" size={20} />
               </div>
               <div>
                 <p className={`text-2xl font-bold capitalize ${
@@ -336,12 +348,13 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+          </StaggerItem>
+        </StaggerContainer>
 
         {/* Areas to Improve & Topics */}
         <div className="grid md:grid-cols-2 gap-4">
           {/* Areas to Focus On */}
-          <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
             <h3 className={`font-semibold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
               Areas to Focus On
             </h3>
@@ -367,14 +380,14 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Frequently Asked Topics */}
-          <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
             <h3 className={`font-semibold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
               Topics You're Exploring
             </h3>
             {profile?.metrics.topTopics && profile.metrics.topTopics.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {profile.metrics.topTopics.map((t, i) => (
-                  <span key={i} className={`px-3 py-1.5 rounded-full text-sm ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                  <span key={i} className={`px-3 py-1.5 rounded-full text-sm ${isDark ? "bg-brand-800/50 text-brand-300" : "bg-brand-100 text-brand-700"}`}>
                     {t.topic} ({t.count})
                   </span>
                 ))}
@@ -388,26 +401,28 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+        <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
           <h3 className={`font-semibold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
             Quick Actions
           </h3>
           <div className="flex flex-wrap gap-3">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => navigate("/")}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white shadow-lg hover:shadow-glow-brand font-medium transition-all"
             >
               + Create / Join Room
-            </button>
+            </motion.button>
           </div>
         </div>
 
         {/* Tip */}
-        <div className={`p-4 rounded-lg ${isDark ? "bg-gray-800/50 border-gray-700" : "bg-blue-50 border-blue-200"} border text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+        <div className={`p-4 rounded-lg ${isDark ? "bg-surface-800/50 border-surface-700" : "bg-brand-50 border-brand-200"} border text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>
           💡 <strong>Tip:</strong> Select a room from the sidebar to start coding, or create a new room to begin a fresh session!
         </div>
 
-        <div className={`p-4 rounded-lg ${isDark ? "bg-indigo-950/40 border-indigo-900/50" : "bg-indigo-50 border-indigo-200"} border text-sm ${isDark ? "text-indigo-200/90" : "text-indigo-900/90"}`}>
+        <div className={`p-4 rounded-lg ${isDark ? "bg-brand-950/40 border-brand-900/50" : "bg-brand-50 border-brand-200"} border text-sm ${isDark ? "text-brand-200/90" : "text-brand-900/90"}`}>
           <strong className="font-semibold">For instructors:</strong> After students join a <strong>learning room</strong>, open that room from the sidebar and use <strong>Class insights</strong> on the dashboard for participation signals and supportive check-in ideas — not grades.
         </div>
       </div>
@@ -418,7 +433,7 @@ const Dashboard: React.FC = () => {
     if (loadingRoom) {
       return (
         <div className="flex items-center justify-center py-20">
-          <AiOutlineLoading3Quarters className="animate-spin text-blue-500" size={32} />
+          <AiOutlineLoading3Quarters className="animate-spin text-brand-400" size={32} />
         </div>
       );
     }
@@ -440,10 +455,11 @@ const Dashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         {/* Room Header */}
-        <div className={`p-6 rounded-xl ${isDark ? "bg-gradient-to-r from-indigo-900/50 to-blue-900/50 border-gray-700" : "bg-gradient-to-r from-indigo-100 to-blue-100 border-blue-200"} border`}>
+        <FadeIn>
+        <div className={`p-6 rounded-2xl ${isDark ? "bg-gradient-to-r from-brand-900/50 to-brand-700/50 border-surface-700" : "bg-gradient-to-r from-brand-100 to-brand-50 border-brand-200"} border`}>
           <div className="flex items-start justify-between">
             <div>
-              <h1 className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+              <h1 className={`text-2xl font-bold font-display ${isDark ? "text-white" : "text-gray-900"}`}>
                 {roomDetails.displayName?.trim() || `Room ${roomDetails.roomId}`}
               </h1>
               {roomDetails.displayName?.trim() && (
@@ -458,18 +474,19 @@ const Dashboard: React.FC = () => {
             </div>
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${
               roomDetails.isLearningRoom 
-                ? isDark ? "bg-purple-900/50 text-purple-300" : "bg-purple-100 text-purple-700"
-                : isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"
+                ? isDark ? "bg-brand-800/50 text-brand-300" : "bg-brand-100 text-brand-700"
+                : isDark ? "bg-brand-800/50 text-brand-300" : "bg-brand-100 text-brand-700"
             }`}>
               {roomDetails.isLearningRoom ? "Learning Room" : "Collaboration Room"}
             </span>
           </div>
         </div>
+        </FadeIn>
 
         {/* Room Info Grid */}
         <div className="grid md:grid-cols-2 gap-4">
           {/* Members */}
-          <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
             <h3 className={`font-semibold mb-3 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
               <FiUsers size={18} />
               Members ({roomDetails.members?.length || 0})
@@ -478,7 +495,7 @@ const Dashboard: React.FC = () => {
               {roomDetails.memberNames && roomDetails.memberNames.length > 0 ? (
                 roomDetails.memberNames.map((name, i) => (
                   <div key={i} className={`flex items-center gap-2 text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${isDark ? "bg-gray-700 text-gray-200" : "bg-gray-200 text-gray-700"}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${isDark ? "bg-surface-700 text-gray-200" : "bg-gray-200 text-gray-700"}`}>
                       {name.charAt(0).toUpperCase()}
                     </div>
                     <span>{name}</span>
@@ -499,7 +516,7 @@ const Dashboard: React.FC = () => {
 
           {/* Learning Module Info (if learning room) */}
           {roomDetails.isLearningRoom ? (
-            <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+            <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
               <h3 className={`font-semibold mb-3 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
                 <FiBook size={18} />
                 Learning Module
@@ -527,7 +544,7 @@ const Dashboard: React.FC = () => {
                             : `${rawIdx + 1} / ${totalCp} checkpoints`}
                         </span>
                       </div>
-                      <div className={`h-2 rounded-full ${isDark ? "bg-gray-700" : "bg-gray-200"}`}>
+                      <div className={`h-2 rounded-full ${isDark ? "bg-surface-700" : "bg-gray-200"}`}>
                         <div 
                           className="h-full rounded-full bg-green-500 transition-all"
                           style={{ width: `${progressPct}%` }}
@@ -542,7 +559,7 @@ const Dashboard: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className={`p-5 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+            <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
               <h3 className={`font-semibold mb-3 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
                 <FiCode size={18} />
                 Collaboration Mode
@@ -561,10 +578,10 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Room activity overview & contributions */}
-        <div className={`p-6 rounded-xl border ${isDark ? "bg-gray-900/80 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
+        <div className={`p-6 rounded-2xl border ${isDark ? "bg-surface-900/80 border-surface-700" : "bg-white border-gray-200 shadow-sm"}`}>
           <div className="flex items-center gap-2 mb-4">
-            <FiBarChart2 className={isDark ? "text-blue-400" : "text-blue-600"} size={22} />
-            <h2 className={`text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+            <FiBarChart2 className={isDark ? "text-brand-400" : "text-brand-600"} size={22} />
+            <h2 className={`text-lg font-bold font-display ${isDark ? "text-white" : "text-gray-900"}`}>
               Room activity & contributions
             </h2>
           </div>
@@ -576,12 +593,12 @@ const Dashboard: React.FC = () => {
 
           {loadingRoomStats ? (
             <div className="flex justify-center py-10">
-              <AiOutlineLoading3Quarters className="animate-spin text-blue-500" size={28} />
+              <AiOutlineLoading3Quarters className="animate-spin text-brand-400" size={28} />
             </div>
           ) : roomStats ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                <div className={`rounded-lg p-4 ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-blue-50/80 border border-blue-100"}`}>
+                <div className={`rounded-lg p-4 ${isDark ? "bg-surface-800/80 border border-surface-700" : "bg-brand-50/80 border border-brand-100"}`}>
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80">
                     <FiMessageCircle size={14} />
                     Chat
@@ -591,7 +608,7 @@ const Dashboard: React.FC = () => {
                   </p>
                   <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-500"}`}>messages</p>
                 </div>
-                <div className={`rounded-lg p-4 ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-violet-50/80 border border-violet-100"}`}>
+                <div className={`rounded-lg p-4 ${isDark ? "bg-surface-800/80 border border-surface-700" : "bg-violet-50/80 border border-violet-100"}`}>
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80">
                     <FiCpu size={14} />
                     AI tutor
@@ -601,7 +618,7 @@ const Dashboard: React.FC = () => {
                   </p>
                   <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-500"}`}>questions asked</p>
                 </div>
-                <div className={`rounded-lg p-4 ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-emerald-50/80 border border-emerald-100"}`}>
+                <div className={`rounded-lg p-4 ${isDark ? "bg-surface-800/80 border border-surface-700" : "bg-emerald-50/80 border border-emerald-100"}`}>
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80">
                     <FiCode size={14} />
                     Language
@@ -611,7 +628,7 @@ const Dashboard: React.FC = () => {
                   </p>
                   <p className={`text-xs mt-0.5 ${isDark ? "text-gray-500" : "text-gray-500"}`}>editor</p>
                 </div>
-                <div className={`rounded-lg p-4 ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-amber-50/80 border border-amber-100"}`}>
+                <div className={`rounded-lg p-4 ${isDark ? "bg-surface-800/80 border border-surface-700" : "bg-amber-50/80 border border-amber-100"}`}>
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide opacity-80">
                     <FiCalendar size={14} />
                     Last activity
@@ -653,11 +670,11 @@ const Dashboard: React.FC = () => {
                               </span>
                             )}
                           </span>
-                          <span className={`shrink-0 font-semibold tabular-nums ${isDark ? "text-blue-300" : "text-blue-700"}`}>
+                          <span className={`shrink-0 font-semibold tabular-nums ${isDark ? "text-brand-300" : "text-brand-700"}`}>
                             {c.contributionPercent}%
                           </span>
                         </div>
-                        <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-200"}`}>
+                        <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? "bg-surface-800" : "bg-gray-200"}`}>
                           <div
                             className={`h-full rounded-full transition-all ${CONTRIBUTION_BAR_COLORS[idx % CONTRIBUTION_BAR_COLORS.length]}`}
                             style={{
@@ -683,11 +700,11 @@ const Dashboard: React.FC = () => {
         {/* Teaching insights — learning room owners only */}
         {roomDetails.isLearningRoom && auth.user?.id === roomDetails.ownerId && (
           <div
-            className={`p-6 rounded-xl border ${isDark ? "bg-gray-900/90 border-amber-900/50" : "bg-amber-50/90 border-amber-200 shadow-sm"}`}
+            className={`p-6 rounded-2xl border ${isDark ? "bg-surface-900/90 border-amber-900/50" : "bg-amber-50/90 border-amber-200 shadow-sm"}`}
           >
             <div className="flex items-center gap-2 mb-2">
               <FiHeart className={isDark ? "text-amber-400" : "text-amber-700"} size={22} />
-              <h2 className={`text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+              <h2 className={`text-lg font-bold font-display ${isDark ? "text-white" : "text-gray-900"}`}>
                 Class insights (for instructors)
               </h2>
             </div>
@@ -712,12 +729,12 @@ const Dashboard: React.FC = () => {
                     </span>
                   )}
                   <span
-                    className={`px-3 py-1 rounded-full ${isDark ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800 border border-amber-200"}`}
+                    className={`px-3 py-1 rounded-full ${isDark ? "bg-surface-800 text-gray-200" : "bg-white text-gray-800 border border-amber-200"}`}
                   >
                     Shared checkpoint: {teachingInsights.moduleCompleted ? "final" : teachingInsights.sharedCheckpointIndex + 1}
                   </span>
                   <span
-                    className={`px-3 py-1 rounded-full ${isDark ? "bg-gray-800 text-gray-200" : "bg-white text-gray-800 border border-amber-200"}`}
+                    className={`px-3 py-1 rounded-full ${isDark ? "bg-surface-800 text-gray-200" : "bg-white text-gray-800 border border-amber-200"}`}
                   >
                     Check-in suggested: {teachingInsights.summary.checkInSuggestedCount} /{" "}
                     {teachingInsights.summary.memberCount}
@@ -727,7 +744,7 @@ const Dashboard: React.FC = () => {
                   {teachingInsights.learners.map((L) => (
                     <li
                       key={L.userId}
-                      className={`rounded-lg border p-4 ${isDark ? "bg-gray-800/80 border-gray-700" : "bg-white border-amber-100"}`}
+                      className={`rounded-lg border p-4 ${isDark ? "bg-surface-800/80 border-surface-700" : "bg-white border-amber-100"}`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                         <span className={`font-semibold ${isDark ? "text-gray-100" : "text-gray-900"}`}>
@@ -778,18 +795,20 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Enter Room Button */}
-        <button
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
           onClick={handleEnterRoom}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+          className="w-full py-4 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white font-semibold text-lg transition-all duration-200 shadow-lg hover:shadow-glow-brand"
         >
           {roomDetails.isLearningRoom ? "Continue Learning" : "Enter Room"}
-        </button>
+        </motion.button>
       </div>
     );
   };
 
   return (
-    <div className={`flex h-screen ${isDark ? "bg-gray-950" : "bg-gray-100"}`}>
+    <div className={`flex h-screen ${isDark ? "bg-surface-900" : "bg-surface-50"}`}>
       <Sidebar
         showRooms={true}
         onOpenAccount={() => setIsAccountOpen(true)}

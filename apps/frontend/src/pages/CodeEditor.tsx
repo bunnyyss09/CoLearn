@@ -51,6 +51,8 @@ type AiMessage = {
   // Optional display name for the user who asked the question.
   // Present when sender === 'user'.
   userName?: string;
+  /** Present for user messages so layout can show mine vs others. */
+  userId?: string;
 };
 
 // Type for an Input/Output session
@@ -401,7 +403,15 @@ const CodeEditor: React.FC = () => {
         // and the AI's reply via WebSocket so everyone sees the same
         // AI conversation in real time.
         if (data.type === "aiMessages" && Array.isArray(data.messages)) {
-          setAiMessages(prev => [...prev, ...data.messages]);
+          setAiMessages((prev) => [
+            ...prev,
+            ...data.messages.map((m: AiMessage) => ({
+              sender: m.sender,
+              text: m.text,
+              userName: m.userName,
+              userId: m.userId,
+            })),
+          ]);
         // When a learning module is started by someone, move everyone to the
         // learning room view for this room.
         }
@@ -567,11 +577,25 @@ const CodeEditor: React.FC = () => {
     </div>
   );
 
-  const roomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full min-h-0 transition-all duration-200`;
+  const roomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col flex-1 min-h-0 h-full transition-all duration-200`;
 
   /** Keeps Chat mounted while viewing AI / Room so messages and WS listener are not torn down. */
   const renderPersistentChatPanel = () => {
-    if (!chatId) return null;
+    if (activePanel === "chat" && !chatId) {
+      return (
+        <div className={`${roomChatShellClass} flex flex-col`}>
+          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+            <FiMessageCircle /> Room Chat
+          </h2>
+          <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
+            Chat is unavailable until the room is fully initialized.
+          </div>
+        </div>
+      );
+    }
+    if (!chatId) {
+      return null;
+    }
     return (
       <div
         className={`${roomChatShellClass} ${activePanel === "chat" ? "flex" : "hidden"}`}
@@ -600,164 +624,198 @@ const CodeEditor: React.FC = () => {
       return renderIoPanelRight();
     }
 
-    if (activePanel === "ai") {
-      return (
-        <div className="flex flex-col flex-1 min-h-0 h-full">
-          {renderPersistentChatPanel()}
-        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiBox /> AI Assistant
-          </h2>
-          <div className="flex-grow p-4 overflow-y-auto space-y-4">
-            {aiMessages.length > 0 ? (
-              aiMessages.map((msg, index) => (
-                <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-                  {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>}
-                  <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-blue-500 text-white rounded-tr-sm border border-blue-600') : (isDark ? 'bg-gray-800' : 'bg-white border border-gray-300')} ${msg.sender === 'user' ? (isDark ? 'text-white' : 'text-white') : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
-                    {msg.sender === 'ai' ? (
-                      <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code: ({ node, inline, className, children, ...props }: any) => {
-                              const match = /language-(\w+)/.exec(className || '');
-                              return !inline && match ? (
-                                <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
-                                  <code className={className} {...props}>
-                                    {children}
-                                  </code>
-                                </pre>
-                              ) : (
-                                <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>
-                                  {children}
-                                </code>
-                              );
-                            },
-                            p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
-                            ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                            ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                            li: ({ children }: any) => <li className="text-sm">{children}</li>,
-                            h1: ({ children }: any) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                            h2: ({ children }: any) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                            h3: ({ children }: any) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                            strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
-                            em: ({ children }: any) => <em className="italic">{children}</em>,
-                            blockquote: ({ children }: any) => <blockquote className={`border-l-4 ${isDark ? "border-gray-600" : "border-gray-400"} pl-3 italic my-2`}>{children}</blockquote>,
-                          }}
-                        >
-                          {msg.text}
-                        </ReactMarkdown>
+    const aiAssistantPanel = (
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
+        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+          <FiBox /> AI Assistant
+        </h2>
+        <div className="flex-grow p-4 overflow-y-auto space-y-4">
+          {aiMessages.length > 0 ? (
+            aiMessages.map((msg, index) => {
+              const isAi = msg.sender === "ai";
+              const isMineUser = msg.sender === "user" && msg.userId === user.id;
+              return (
+                <div key={index} className={`flex w-full ${isAi || !isMineUser ? "justify-start" : "justify-end"}`}>
+                  <div className={`flex items-end gap-2 max-w-[min(85%,28rem)] ${isMineUser ? "flex-row-reverse" : "flex-row"}`}>
+                    {isAi && (
+                      <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs shadow-md">
+                        AI
                       </div>
-                    ) : (
-                      <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                     )}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className={`text-center mt-4 ${isDark ? "text-gray-500" : "text-gray-600"}`}>Ask the AI for a hint or to explain a concept!</p>
-            )}
-            {isAiLoading && (
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>
-                <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-                  <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
-                </div>
-              </div>
-            )}
-            <div ref={aiChatEndRef} />
-          </div>
-          <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
-            <input
-              type="text"
-              value={aiInput}
-              onChange={(e) => setAiInput(e.target.value)}
-              placeholder="Chat with the AI..."
-              className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
-              disabled={isAiLoading}
-            />
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
-              <AiOutlineSend size={20} />
-            </button>
-          </form>
-        </div>
-        </div>
-      );
-    }
-
-    if (activePanel === "chat") {
-      if (!chatId) {
-        return (
-          <div className={`${roomChatShellClass} flex flex-col`}>
-            <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-              <FiMessageCircle /> Room Chat
-            </h2>
-            <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
-              Chat is unavailable until the room is fully initialized.
-            </div>
-          </div>
-        );
-      }
-      return renderPersistentChatPanel();
-    }
-
-    if (activePanel === "info") {
-      return (
-        <div className="flex flex-col flex-1 min-h-0 h-full">
-          {renderPersistentChatPanel()}
-        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiUsers /> Room
-          </h2>
-          <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-            <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiUsers /> Members
-              </h3>
-              <div className="space-y-3">
-                {connectedUsers.length > 0 ? (
-                  connectedUsers.map((u: any) => (
-                    <div key={u.id} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
-                      <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
-                        {u.name.charAt(0).toUpperCase()}
+                    {msg.sender === "user" && (
+                      <div
+                        className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
+                          isMineUser ? "bg-blue-500" : "bg-green-500"
+                        }`}
+                      >
+                        {(isMineUser ? user.name : msg.userName || "?").charAt(0).toUpperCase()}
                       </div>
-                      <div>
-                        <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
-                        <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                      {msg.sender === "user" && !isMineUser && (
+                        <p className={`text-xs font-semibold mb-1 px-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                          {msg.userName || "Teammate"}
+                        </p>
+                      )}
+                      {msg.sender === "user" && isMineUser && (
+                        <p className={`text-xs font-semibold mb-1 px-1 text-right ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                          You
+                        </p>
+                      )}
+                      <div
+                        className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
+                          isAi
+                            ? isDark
+                              ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                              : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                            : isMineUser
+                              ? isDark
+                                ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
+                                : "bg-blue-500 text-white rounded-tr-sm border border-blue-600"
+                              : isDark
+                                ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                                : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                        }`}
+                      >
+                        {isAi ? (
+                          <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code: ({ node, inline, className, children, ...props }: any) => {
+                                  const match = /language-(\w+)/.exec(className || "");
+                                  return !inline && match ? (
+                                    <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
+                                      <code className={className} {...props}>
+                                        {children}
+                                      </code>
+                                    </pre>
+                                  ) : (
+                                    <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>
+                                      {children}
+                                    </code>
+                                  );
+                                },
+                                p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
+                                ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                                ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                                li: ({ children }: any) => <li className="text-sm">{children}</li>,
+                                h1: ({ children }: any) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                                h2: ({ children }: any) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                                h3: ({ children }: any) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                                strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
+                                em: ({ children }: any) => <em className="italic">{children}</em>,
+                                blockquote: ({ children }: any) => (
+                                  <blockquote className={`border-l-4 ${isDark ? "border-gray-600" : "border-gray-400"} pl-3 italic my-2`}>{children}</blockquote>
+                                ),
+                              }}
+                            >
+                              {msg.text}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                        )}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
-                )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className={`text-center mt-4 ${isDark ? "text-gray-500" : "text-gray-600"}`}>Ask the AI for a hint or to explain a concept!</p>
+          )}
+          {isAiLoading && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs">
+                AI
+              </div>
+              <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+                <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
               </div>
             </div>
-            <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiHash /> Invite Code
-              </h3>
-              <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
-              <div className="flex items-center gap-2">
-                <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{user.roomId || '...'}</p>
-                <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
-                  {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
-                </button>
-              </div>
+          )}
+          <div ref={aiChatEndRef} />
+        </div>
+        <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+          <input
+            type="text"
+            value={aiInput}
+            onChange={(e) => setAiInput(e.target.value)}
+            placeholder="Chat with the AI..."
+            className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+            disabled={isAiLoading}
+          />
+          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
+            <AiOutlineSend size={20} />
+          </button>
+        </form>
+      </div>
+    );
+
+    const roomInfoPanel = (
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
+        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+          <FiUsers /> Room
+        </h2>
+        <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+          <div>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              <FiUsers /> Members
+            </h3>
+            <div className="space-y-3">
+              {connectedUsers.length > 0 ? (
+                connectedUsers.map((u: any) => (
+                  <div key={u.id} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
+                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                      {u.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
+                      <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
+              )}
+            </div>
+          </div>
+          <div>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              <FiHash /> Invite Code
+            </h3>
+            <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
+            <div className="flex items-center gap-2">
+              <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{user.roomId || "..."}</p>
+              <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
+                {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
+              </button>
             </div>
           </div>
         </div>
-        </div>
-      );
-    }
+      </div>
+    );
 
-    return null;
+    return (
+      <div className="flex flex-col flex-1 min-h-0 h-full">
+        {renderPersistentChatPanel()}
+        {activePanel === "ai" && aiAssistantPanel}
+        {activePanel === "info" && roomInfoPanel}
+      </div>
+    );
   };
 
   const handleAiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading) return;
 
-    const userMessage: AiMessage = { sender: 'user', text: aiInput, userName: user.name };
+    const userMessage: AiMessage = {
+      sender: 'user',
+      text: aiInput,
+      userName: user.name,
+      userId: user.id,
+    };
     setAiMessages(prev => [...prev, userMessage]);
     const currentAiInput = aiInput;
     setAiInput("");
@@ -1121,37 +1179,6 @@ const CodeEditor: React.FC = () => {
           </div>
         </nav>
 
-        {collabCoachKind && collabCoachKey && typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) !== "1" && (
-          <div
-            className={`flex-shrink-0 flex items-start gap-3 rounded-xl border px-4 py-3 ${isDark ? "bg-amber-950/50 border-amber-800 text-amber-100" : "bg-amber-50 border-amber-200 text-amber-950"}`}
-            role="status"
-          >
-            <FiHeart className="shrink-0 mt-0.5 text-amber-500" size={20} aria-hidden />
-            <div className="flex-1 min-w-0 text-sm leading-relaxed">
-              <p className="font-semibold mb-1">You’ve got this</p>
-              {collabCoachKind === "slow" ? (
-                <p>
-                  Your learning profile suggests taking a steady pace — that is a strength. Use the AI tutor and chat when you need them.
-                </p>
-              ) : (
-                <p>
-                  Practice tests have been tough lately — try smaller steps and ask the AI for hints. {connectedUsers.length > 0 ? "Someone else is in the room if you want to collaborate." : ""}
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (collabCoachKey) sessionStorage.setItem(collabCoachKey, "1");
-                setCollabCoachKind(null);
-              }}
-              className={`shrink-0 text-xs font-semibold underline ${isDark ? "text-amber-300" : "text-amber-800"}`}
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
         <div className="flex flex-1 gap-4 overflow-hidden flex-col lg:flex-row">
           <div className="flex flex-col flex-1 overflow-hidden">
             <div className={`flex-1 border ${isDark ? "border-gray-800" : "border-gray-300 bg-gray-50"} rounded-lg overflow-hidden shadow-2xl transition-all duration-200`}>
@@ -1179,6 +1206,38 @@ const CodeEditor: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
+      {collabCoachKind && collabCoachKey && typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) !== "1" && (
+        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-start justify-center pt-4 px-4">
+          <div
+            className={`max-w-lg w-full sm:w-auto px-4 py-3 rounded-xl shadow-2xl border text-sm pointer-events-auto flex items-start gap-3 ${isDark ? "bg-amber-950/50 border-amber-800 text-amber-100" : "bg-amber-50 border-amber-200 text-amber-950"}`}
+            role="status"
+          >
+            <FiHeart className="shrink-0 mt-0.5 text-amber-500" size={20} aria-hidden />
+            <div className="flex-1 min-w-0 text-sm leading-relaxed">
+              <p className="font-semibold mb-1">You’ve got this</p>
+              {collabCoachKind === "slow" ? (
+                <p>
+                  Your learning profile suggests taking a steady pace — that is a strength. Use the AI tutor and chat when you need them.
+                </p>
+              ) : (
+                <p>
+                  Practice tests have been tough lately — try smaller steps and ask the AI for hints. {connectedUsers.length > 0 ? "Someone else is in the room if you want to collaborate." : ""}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (collabCoachKey) sessionStorage.setItem(collabCoachKey, "1");
+                setCollabCoachKind(null);
+              }}
+              className={`shrink-0 text-xs font-semibold underline ${isDark ? "text-amber-300" : "text-amber-800"}`}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
