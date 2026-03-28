@@ -1,8 +1,9 @@
 import { config } from "dotenv";
 import path from "path";
 
-// Load .env from project root
+// Load .env: monorepo root (from apps/express-server/src or dist) and cwd as fallback
 config({ path: path.resolve(__dirname, "../../../.env") });
+config({ path: path.resolve(process.cwd(), ".env") });
 import express from "express";
 import { createClient } from "redis";
 import cors from "cors";
@@ -15,6 +16,7 @@ import Code from "./models/Code";
 import Notes from "./models/Notes";
 import AiMessage from "./models/AiMessage";
 import LearningModule from "./models/LearningModule";
+import LearningProgress from "./models/LearningProgress";
 import { v4 as uuidv4 } from "uuid";
 import { generateToken, authenticateToken, AuthRequest } from "./utils/auth";
 import learningRouter, { ensureDefaultLearningModules } from "./routes/learning";
@@ -23,7 +25,17 @@ import {
   recordAiInteraction,
   getUserAiContext,
   getUserProfileData,
+  buildLearnerTeachingRows,
 } from "./utils/learningProfileService";
+import { aggregateRoomMemberActivity } from "./utils/roomActivity";
+
+const ROOM_DISPLAY_NAME_MAX = 80;
+
+function sanitizeRoomDisplayName(raw: unknown): string | undefined {
+  if (raw == null || typeof raw !== "string") return undefined;
+  const t = raw.trim().slice(0, ROOM_DISPLAY_NAME_MAX);
+  return t.length > 0 ? t : undefined;
+}
 
 const app = express();
 app.use(express.json());
@@ -158,23 +170,30 @@ app.post('/ai-tutor', async (req, res) => {
     moduleTitle,
     moduleSummary,
   } = req.body;
-  if (!userQuery || !language || !code) {
-      return res.status(400).json({ error: "Missing required fields: userQuery, language, or code." });
+  const query = typeof userQuery === "string" ? userQuery.trim() : "";
+  const lang = typeof language === "string" ? language.trim() : "";
+  const codeText = typeof code === "string" ? code : "";
+  if (!query || !lang) {
+    return res
+      .status(400)
+      .json({ error: "Missing required fields: userQuery or language." });
   }
   try {
-      // Get user learning context if userId is provided
+      // Get user learning context if userId is provided (never fail the tutor if profile DB hiccups)
       let userLearningContext = '';
-      if (userId) {
-        // Track this AI interaction for the user's learning profile
-        await recordAiInteraction(userId, userQuery, code);
-        // Get personalized context about the user's learning journey
-        userLearningContext = await getUserAiContext(userId);
+      if (userId != null && String(userId).trim() !== "") {
+        try {
+          await recordAiInteraction(String(userId), query, codeText);
+          userLearningContext = await getUserAiContext(String(userId));
+        } catch (profileErr) {
+          console.error("AI tutor: learning profile step failed (continuing without profile):", profileErr);
+        }
       }
 
       const aiResponseText = await getAiTutorResponse({
-        userQuery,
-        language,
-        code,
+        userQuery: query,
+        language: lang,
+        code: codeText,
         input: input ?? "",
         output: output ?? "",
         userName,
@@ -192,9 +211,10 @@ app.post('/ai-tutor', async (req, res) => {
         try {
           const userMessage = new AiMessage({
             roomId,
-            sender: 'user',
-            text: userQuery,
+            sender: "user",
+            text: query,
             userName: userName ?? undefined,
+            userId: userId ? String(userId) : undefined,
           });
           await userMessage.save();
 
@@ -214,7 +234,14 @@ app.post('/ai-tutor', async (req, res) => {
 
   } catch (error) {
       console.error("AI Tutor endpoint failed:", error);
-      res.status(500).json({ error: "An internal server error occurred while processing the AI request." });
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("GEMINI_API_KEY")) {
+        return res.status(503).json({ error: msg });
+      }
+      res.status(500).json({
+        error:
+          "An internal server error occurred while processing the AI request. Check the server logs for details.",
+      });
   }
 });
 
@@ -293,7 +320,8 @@ app.get("/chat/:chatId", async (req, res) => {
 
 // Room management endpoints
 app.post("/room/create", authenticateToken, async (req: AuthRequest, res) => {
-  const { roomId } = req.body;
+  const { roomId, displayName: displayNameRaw } = req.body;
+  const displayName = sanitizeRoomDisplayName(displayNameRaw);
 
   if (!roomId) {
     return res.status(400).json({ error: "Missing roomId" });
@@ -348,6 +376,7 @@ app.post("/room/create", authenticateToken, async (req: AuthRequest, res) => {
     // Create Room
     room = new Room({
       roomId,
+      ...(displayName ? { displayName } : {}),
       ownerId,
       members: [ownerId],
       chatId,
@@ -394,6 +423,28 @@ app.post("/room/join", authenticateToken, async (req: AuthRequest, res) => {
       await room.save();
     }
 
+    // If room has a learning module, create progress for the user if not exists
+    if (room.moduleId) {
+      const existingProgress = await LearningProgress.findOne({ roomId, moduleId: room.moduleId, userId });
+      if (!existingProgress) {
+        const module = await LearningModule.findOne({ moduleId: room.moduleId });
+        if (module) {
+          const checkpointStatuses = module.checkpoints.map(cp => ({
+            checkpointId: cp.checkpointId,
+            status: 'pending'
+          }));
+          const progress = new LearningProgress({
+            roomId,
+            moduleId: room.moduleId,
+            userId,
+            currentCheckpointIndex: 0,
+            checkpointStatuses
+          });
+          await progress.save();
+        }
+      }
+    }
+
     res.status(200).json({ room });
   } catch (error) {
     console.error("Error joining room:", error);
@@ -412,6 +463,7 @@ app.get("/rooms/my", authenticateToken, async (req: AuthRequest, res) => {
     // Include ownerId in response
     const roomsWithOwner = rooms.map(room => ({
       roomId: room.roomId,
+      displayName: room.displayName,
       ownerId: room.ownerId,
       members: room.members,
     }));
@@ -480,6 +532,7 @@ app.get("/room/:roomId/details", authenticateToken, async (req: AuthRequest, res
     res.status(200).json({
       room: {
         roomId: room.roomId,
+        displayName: room.displayName,
         ownerId: room.ownerId,
         ownerName,
         members: room.members,
@@ -498,6 +551,154 @@ app.get("/room/:roomId/details", authenticateToken, async (req: AuthRequest, res
     res.status(500).json({ error: "Failed to fetch room details" });
   }
 });
+
+/** Integer percentages that sum to 100 (largest remainder method). */
+function scoresToPercents(scores: number[]): number[] {
+  const total = scores.reduce((a, b) => a + b, 0);
+  if (total === 0) return scores.map(() => 0);
+  const exact = scores.map((s) => (100 * s) / total);
+  const floors = exact.map((x) => Math.floor(x));
+  let rem = 100 - floors.reduce((a, b) => a + b, 0);
+  const order = exact
+    .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < rem; k++) floors[order[k].i]++;
+  return floors;
+}
+
+// Room activity stats (chat + AI tutor attribution) for dashboard
+app.get("/room/:roomId/stats", authenticateToken, async (req: AuthRequest, res) => {
+  const { roomId } = req.params;
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const room = await Room.findOne({ roomId });
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+    if (!room.members.includes(req.user.userId)) {
+      return res.status(403).json({ error: "You are not a member of this room" });
+    }
+
+    const activity = await aggregateRoomMemberActivity(room);
+    const { idToName, chatByUser, aiByUser } = activity;
+
+    const CHAT_W = 1;
+    const AI_W = 2;
+    const memberIds = [...room.members];
+    const scores = memberIds.map((mid) => {
+      const chat = chatByUser.get(String(mid)) || 0;
+      const ai = aiByUser.get(String(mid)) || 0;
+      return chat * CHAT_W + ai * AI_W;
+    });
+    const percents = scoresToPercents(scores);
+
+    const contributions = memberIds.map((mid, i) => ({
+      userId: mid,
+      userName: idToName.get(String(mid)) || mid,
+      chatMessages: chatByUser.get(String(mid)) || 0,
+      aiQuestions: aiByUser.get(String(mid)) || 0,
+      activityScore: scores[i],
+      contributionPercent: percents[i],
+    }));
+
+    const codeDoc = await Code.findOne({ codeId: room.codeId })
+      .select("language updatedAt")
+      .lean();
+
+    res.status(200).json({
+      summary: {
+        totalChatMessages: activity.totalChatMessages,
+        totalAiQuestions: activity.totalAiUserMessages,
+        memberCount: room.members.length,
+        language: codeDoc?.language || "javascript",
+        lastActivityAt: activity.lastActivityAt?.toISOString() ?? null,
+        codeLastUpdatedAt: codeDoc?.updatedAt?.toISOString() ?? null,
+        hasLoggedActivity: scores.some((s) => s > 0),
+      },
+      contributions,
+      weights: { chatMessage: CHAT_W, aiQuestion: AI_W },
+    });
+  } catch (error) {
+    console.error("Error fetching room stats:", error);
+    res.status(500).json({ error: "Failed to fetch room stats" });
+  }
+});
+
+// Teaching cohort view: room owner only, learning rooms only. Supportive signals for check-ins — not grades.
+app.get(
+  "/room/:roomId/teaching-insights",
+  authenticateToken,
+  async (req: AuthRequest, res) => {
+    const { roomId } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const room = await Room.findOne({ roomId });
+      if (!room) {
+        return res.status(404).json({ error: "Room not found" });
+      }
+      if (room.ownerId !== req.user.userId) {
+        return res
+          .status(403)
+          .json({ error: "Only the room owner can view teaching insights." });
+      }
+      if (!room.isLearningRoom) {
+        return res.status(400).json({
+          error: "Teaching insights are only available for learning rooms.",
+        });
+      }
+
+      const activity = await aggregateRoomMemberActivity(room);
+      const learners = await buildLearnerTeachingRows(
+        [...room.members],
+        activity.idToName,
+        {
+          chatByUser: activity.chatByUser,
+          aiByUser: activity.aiByUser,
+          anyMemberActivity: activity.anyMemberActivity,
+        }
+      );
+
+      const checkInSuggestedCount = learners.filter((l) => l.suggestCheckIn)
+        .length;
+
+      let sharedCheckpointIndex = room.currentCheckpointIndex ?? 0;
+      let moduleCompleted = false;
+      if (room.moduleId) {
+        const mod = await LearningModule.findOne({ moduleId: room.moduleId })
+          .select("checkpoints")
+          .lean();
+        const n = mod?.checkpoints?.length ?? 0;
+        if (n > 0) {
+          const raw = room.currentCheckpointIndex ?? 0;
+          moduleCompleted = raw >= n;
+          sharedCheckpointIndex = Math.min(raw, n - 1);
+        }
+      }
+
+      res.status(200).json({
+        disclaimer:
+          "These are automated, privacy-preserving signals (no raw answers or code). Use them for supportive check-ins, not grading.",
+        sharedCheckpointIndex,
+        moduleCompleted,
+        summary: {
+          memberCount: room.members.length,
+          checkInSuggestedCount,
+          anyRoomActivity: activity.anyMemberActivity,
+        },
+        learners,
+      });
+    } catch (error) {
+      console.error("Error fetching teaching insights:", error);
+      res.status(500).json({ error: "Failed to fetch teaching insights" });
+    }
+  }
+);
 
 // Delete a room (only owner can delete)
 app.delete("/room/:roomId", authenticateToken, async (req: AuthRequest, res) => {
@@ -534,6 +735,54 @@ app.delete("/room/:roomId", authenticateToken, async (req: AuthRequest, res) => 
   }
 });
 
+// Update room display name (owner only)
+app.patch("/room/:roomId", authenticateToken, async (req: AuthRequest, res) => {
+  const { roomId } = req.params;
+
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(req.body, "displayName")) {
+    return res.status(400).json({ error: "Missing displayName" });
+  }
+  const { displayName: displayNameRaw } = req.body;
+  if (typeof displayNameRaw !== "string") {
+    return res.status(400).json({ error: "displayName must be a string" });
+  }
+
+  try {
+    const room = await Room.findOne({ roomId });
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+    if (room.ownerId !== req.user.userId) {
+      return res.status(403).json({ error: "Only the room owner can rename the room" });
+    }
+
+    const cleaned = sanitizeRoomDisplayName(displayNameRaw);
+
+    if (cleaned) {
+      room.displayName = cleaned;
+    } else {
+      room.set("displayName", undefined);
+    }
+    await room.save();
+
+    res.status(200).json({
+      room: {
+        roomId: room.roomId,
+        displayName: room.displayName,
+        ownerId: room.ownerId,
+        members: room.members,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating room:", error);
+    res.status(500).json({ error: "Failed to update room" });
+  }
+});
+
 // Get all room data (code, language, AI messages, chat)
 app.get("/room/:roomId/data", async (req, res) => {
   const { roomId } = req.params;
@@ -565,6 +814,7 @@ app.get("/room/:roomId/data", async (req, res) => {
         sender: msg.sender,
         text: msg.text,
         userName: msg.userName,
+        userId: msg.userId,
       })),
       chatMessages: chatMessages.map(msg => ({
         userId: msg.userId,

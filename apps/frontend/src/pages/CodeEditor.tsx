@@ -4,11 +4,20 @@ import { userAtom } from "../atoms/userAtom";
 import { authAtom } from "../atoms/authAtom";
 import { useRecoilState, useRecoilValue } from "recoil";
 import { AiOutlineLoading3Quarters, AiOutlineSend, AiOutlineCopy, AiOutlineCheck } from "react-icons/ai"; // Import icons
-import { FiMessageCircle, FiUsers, FiHash, FiBox, FiChevronsLeft, FiChevronsRight } from "react-icons/fi";
+import { FiMessageCircle, FiUsers, FiHash, FiBox, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiHeart } from "react-icons/fi";
+import {
+  SiCplusplus,
+  SiGo,
+  SiJavascript,
+  SiOpenjdk,
+  SiPython,
+  SiRust,
+} from "react-icons/si";
 import { socketAtom } from "../atoms/socketAtom";
 import { useNavigate, useParams } from "react-router-dom";
 import { connectedUsersAtom } from "../atoms/connectedUsersAtom";
 import { IP_ADDRESS } from "../Globle";
+import { adaptStarterCommentToLanguage } from "../utils/editorLanguagePlaceholders";
 import Chat from "../components/Chat";
 import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
@@ -21,6 +30,20 @@ import remarkGfm from 'remark-gfm';
 // Debounce delay for code sync (ms) - prevents flooding WebSocket on fast typing
 const CODE_SYNC_DEBOUNCE_MS = 150;
 
+const LANGUAGE_OPTIONS: {
+  value: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string; size?: number }>;
+  iconClass: string;
+}[] = [
+  { value: "javascript", label: "JavaScript", Icon: SiJavascript, iconClass: "text-[#F7DF1E]" },
+  { value: "python", label: "Python", Icon: SiPython, iconClass: "text-[#3776AB]" },
+  { value: "cpp", label: "C++", Icon: SiCplusplus, iconClass: "text-[#00599C]" },
+  { value: "java", label: "Java", Icon: SiOpenjdk, iconClass: "text-[#EA2D2E]" },
+  { value: "rust", label: "Rust", Icon: SiRust, iconClass: "text-[#DEA584]" },
+  { value: "go", label: "Go", Icon: SiGo, iconClass: "text-[#00ADD8]" },
+];
+
 // AI Message type
 type AiMessage = {
   sender: 'user' | 'ai';
@@ -28,6 +51,8 @@ type AiMessage = {
   // Optional display name for the user who asked the question.
   // Present when sender === 'user'.
   userName?: string;
+  /** Present for user messages so layout can show mine vs others. */
+  userId?: string;
 };
 
 // Type for an Input/Output session
@@ -94,9 +119,19 @@ const CodeEditor: React.FC = () => {
   // Learning room metadata (if this room has been upgraded to a module)
   const [_isLearningRoom, setIsLearningRoom] = useState<boolean>(false);
   const [_learningModuleId, setLearningModuleId] = useState<string | null>(null);
+  const [roomDisplayName, setRoomDisplayName] = useState<string | null>(null);
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const langMenuRef = useRef<HTMLDivElement>(null);
 
   // Sidebar panel state
   const [activePanel, setActivePanel] = useState<"ai" | "chat" | "info" | null>("ai");
+  const [aiPanelUnread, setAiPanelUnread] = useState(false);
+  const [chatPanelUnread, setChatPanelUnread] = useState(false);
+  const lastSeenAiCountRef = useRef(0);
+  const codeRoomId = user.roomId || params.roomId || "";
+  const [collabCoachKind, setCollabCoachKind] = useState<"slow" | "tests" | null>(null);
+  const collabCoachKey =
+    codeRoomId !== "" ? `colearn-encourage-dismiss-editor-${codeRoomId}` : null;
 
   // Keep refs in sync with state to avoid stale closures in callbacks
   useEffect(() => { codeRef.current = code; }, [code]);
@@ -156,6 +191,8 @@ const CodeEditor: React.FC = () => {
           if (roomData.room) {
             setIsLearningRoom(!!roomData.room.isLearningRoom);
             setLearningModuleId(roomData.room.moduleId || null);
+            const dn = roomData.room.displayName;
+            setRoomDisplayName(typeof dn === "string" && dn.trim() ? dn.trim() : null);
           }
         }
 
@@ -166,8 +203,9 @@ const CodeEditor: React.FC = () => {
           const data = await dataResponse.json();
           
           // Load code and language from database (will be overridden by WebSocket sync if connected)
+          const loadedLang = data.language || "javascript";
           if (data.code !== undefined) {
-            setCode(data.code);
+            setCode(adaptStarterCommentToLanguage(data.code, loadedLang));
           }
           if (data.language) {
             setLanguage(data.language);
@@ -185,6 +223,39 @@ const CodeEditor: React.FC = () => {
 
     fetchRoomData();
   }, [user.roomId, params.roomId, IP_ADDRESS]);
+
+  useEffect(() => {
+    setCollabCoachKind(null);
+  }, [codeRoomId]);
+
+  useEffect(() => {
+    const token = auth.token;
+    const uid = auth.user?.id || user.id;
+    if (!token || !uid || !codeRoomId || !collabCoachKey) return;
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) === "1") return;
+    let cancelled = false;
+    fetch(`http://${IP_ADDRESS}:3000/learning-profile/${uid}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const p = data.profile;
+        if (!p) return;
+        const pace = p.learningPace as string | undefined;
+        const tp = p.metrics?.totalTestPasses ?? 0;
+        const tf = p.metrics?.totalTestFailures ?? 0;
+        const total = tp + tf;
+        const rate = total > 0 ? (100 * tp) / total : null;
+        if (pace === "slow") setCollabCoachKind("slow");
+        else if (total >= 3 && rate !== null && rate < 50) setCollabCoachKind("tests");
+        else setCollabCoachKind(null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.token, auth.user?.id, user.id, codeRoomId, collabCoachKey]);
 
   // WebSocket connection logic
   useEffect(() => {
@@ -280,7 +351,10 @@ const CodeEditor: React.FC = () => {
           // Clear the flag after a short delay to allow state to settle
           setTimeout(() => { isRemoteUpdateRef.current = false; }, 50);
         }
-        if (data.type === "language") setLanguage(data.language);
+        if (data.type === "language") {
+          setCode((prev: string) => adaptStarterCommentToLanguage(prev, data.language));
+          setLanguage(data.language);
+        }
         if (data.type === "submitBtnStatus") {
           setCurrentButtonState(data.value);
           setIsLoading(data.isLoading);
@@ -312,7 +386,10 @@ const CodeEditor: React.FC = () => {
 
         if (data.type === "allData") {
           isRemoteUpdateRef.current = true;
-          setCode(data.code);
+          const syncLang = data.language || "javascript";
+          if (data.code !== undefined) {
+            setCode(adaptStarterCommentToLanguage(data.code, syncLang));
+          }
           setLanguage(data.language);
           setCurrentButtonState(data.currentButtonState);
           setIsLoading(data.isLoading);
@@ -326,7 +403,15 @@ const CodeEditor: React.FC = () => {
         // and the AI's reply via WebSocket so everyone sees the same
         // AI conversation in real time.
         if (data.type === "aiMessages" && Array.isArray(data.messages)) {
-          setAiMessages(prev => [...prev, ...data.messages]);
+          setAiMessages((prev) => [
+            ...prev,
+            ...data.messages.map((m: AiMessage) => ({
+              sender: m.sender,
+              text: m.text,
+              userName: m.userName,
+              userId: m.userId,
+            })),
+          ]);
         // When a learning module is started by someone, move everyone to the
         // learning room view for this room.
         }
@@ -343,6 +428,42 @@ const CodeEditor: React.FC = () => {
   useEffect(() => {
     aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [aiMessages]);
+
+  useEffect(() => {
+    if (!langMenuOpen) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setLangMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLangMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [langMenuOpen]);
+
+  useEffect(() => {
+    if (activePanel === "ai") {
+      setAiPanelUnread(false);
+      lastSeenAiCountRef.current = aiMessages.length;
+      return;
+    }
+    if (aiMessages.length > lastSeenAiCountRef.current) {
+      setAiPanelUnread(true);
+    }
+    lastSeenAiCountRef.current = aiMessages.length;
+  }, [aiMessages, activePanel]);
+
+  useEffect(() => {
+    if (activePanel === "chat") {
+      setChatPanelUnread(false);
+    }
+  }, [activePanel]);
 
   const startIoResizeDrag = (event: React.MouseEvent<HTMLDivElement>) => {
     if (isIoCollapsed) return;
@@ -456,172 +577,245 @@ const CodeEditor: React.FC = () => {
     </div>
   );
 
+  const roomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col flex-1 min-h-0 h-full transition-all duration-200`;
+
+  /** Keeps Chat mounted while viewing AI / Room so messages and WS listener are not torn down. */
+  const renderPersistentChatPanel = () => {
+    if (activePanel === "chat" && !chatId) {
+      return (
+        <div className={`${roomChatShellClass} flex flex-col`}>
+          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+            <FiMessageCircle /> Room Chat
+          </h2>
+          <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
+            Chat is unavailable until the room is fully initialized.
+          </div>
+        </div>
+      );
+    }
+    if (!chatId) {
+      return null;
+    }
+    return (
+      <div
+        className={`${roomChatShellClass} ${activePanel === "chat" ? "flex" : "hidden"}`}
+        aria-hidden={activePanel !== "chat"}
+      >
+        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+          <FiMessageCircle /> Room Chat
+        </h2>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Chat
+            socket={socket}
+            chatId={chatId}
+            userId={user.id}
+            userName={user.name}
+            IP_ADDRESS={IP_ADDRESS}
+            panelActive={activePanel === "chat"}
+            onLiveChatMessage={() => setChatPanelUnread(true)}
+          />
+        </div>
+      </div>
+    );
+  };
+
   const renderPanelContent = () => {
     if (!activePanel) {
       return renderIoPanelRight();
     }
 
-    if (activePanel === "ai") {
-      return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full overflow-hidden transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiBox /> AI Assistant
-          </h2>
-          <div className="flex-grow p-4 overflow-y-auto space-y-4">
-            {aiMessages.length > 0 ? (
-              aiMessages.map((msg, index) => (
-                <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-                  {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>}
-                  <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-blue-500 text-white rounded-tr-sm border border-blue-600') : (isDark ? 'bg-gray-800' : 'bg-white border border-gray-300')} ${msg.sender === 'user' ? (isDark ? 'text-white' : 'text-white') : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
-                    {msg.sender === 'ai' ? (
-                      <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code: ({ node, inline, className, children, ...props }: any) => {
-                              const match = /language-(\w+)/.exec(className || '');
-                              return !inline && match ? (
-                                <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
-                                  <code className={className} {...props}>
-                                    {children}
-                                  </code>
-                                </pre>
-                              ) : (
-                                <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>
-                                  {children}
-                                </code>
-                              );
-                            },
-                            p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
-                            ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                            ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                            li: ({ children }: any) => <li className="text-sm">{children}</li>,
-                            h1: ({ children }: any) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                            h2: ({ children }: any) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                            h3: ({ children }: any) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                            strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
-                            em: ({ children }: any) => <em className="italic">{children}</em>,
-                            blockquote: ({ children }: any) => <blockquote className={`border-l-4 ${isDark ? "border-gray-600" : "border-gray-400"} pl-3 italic my-2`}>{children}</blockquote>,
-                          }}
-                        >
-                          {msg.text}
-                        </ReactMarkdown>
+    const aiAssistantPanel = (
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
+        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+          <FiBox /> AI Assistant
+        </h2>
+        <div className="flex-grow p-4 overflow-y-auto space-y-4">
+          {aiMessages.length > 0 ? (
+            aiMessages.map((msg, index) => {
+              const isAi = msg.sender === "ai";
+              const isMineUser = msg.sender === "user" && msg.userId === user.id;
+              return (
+                <div key={index} className={`flex w-full ${isAi || !isMineUser ? "justify-start" : "justify-end"}`}>
+                  <div className={`flex items-end gap-2 max-w-[min(85%,28rem)] ${isMineUser ? "flex-row-reverse" : "flex-row"}`}>
+                    {isAi && (
+                      <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs shadow-md">
+                        AI
                       </div>
-                    ) : (
-                      <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                     )}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className={`text-center mt-4 ${isDark ? "text-gray-500" : "text-gray-600"}`}>Ask the AI for a hint or to explain a concept!</p>
-            )}
-            {isAiLoading && (
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>
-                <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-                  <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
-                </div>
-              </div>
-            )}
-            <div ref={aiChatEndRef} />
-          </div>
-          <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
-            <input
-              type="text"
-              value={aiInput}
-              onChange={(e) => setAiInput(e.target.value)}
-              placeholder="Chat with the AI..."
-              className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
-              disabled={isAiLoading}
-            />
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
-              <AiOutlineSend size={20} />
-            </button>
-          </form>
-        </div>
-      );
-    }
-
-    if (activePanel === "chat") {
-      return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiMessageCircle /> Room Chat
-          </h2>
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {chatId ? (
-              <Chat
-                socket={socket}
-                chatId={chatId}
-                userId={user.id}
-                userName={user.name}
-                IP_ADDRESS={IP_ADDRESS}
-              />
-            ) : (
-              <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
-                Chat is unavailable until the room is fully initialized.
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (activePanel === "info") {
-      return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiUsers /> Room
-          </h2>
-          <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-            <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiUsers /> Members
-              </h3>
-              <div className="space-y-3">
-                {connectedUsers.length > 0 ? (
-                  connectedUsers.map((u: any) => (
-                    <div key={u.id} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
-                      <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
-                        {u.name.charAt(0).toUpperCase()}
+                    {msg.sender === "user" && (
+                      <div
+                        className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
+                          isMineUser ? "bg-blue-500" : "bg-green-500"
+                        }`}
+                      >
+                        {(isMineUser ? user.name : msg.userName || "?").charAt(0).toUpperCase()}
                       </div>
-                      <div>
-                        <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
-                        <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                      {msg.sender === "user" && !isMineUser && (
+                        <p className={`text-xs font-semibold mb-1 px-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                          {msg.userName || "Teammate"}
+                        </p>
+                      )}
+                      {msg.sender === "user" && isMineUser && (
+                        <p className={`text-xs font-semibold mb-1 px-1 text-right ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                          You
+                        </p>
+                      )}
+                      <div
+                        className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
+                          isAi
+                            ? isDark
+                              ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                              : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                            : isMineUser
+                              ? isDark
+                                ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
+                                : "bg-blue-500 text-white rounded-tr-sm border border-blue-600"
+                              : isDark
+                                ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                                : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                        }`}
+                      >
+                        {isAi ? (
+                          <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code: ({ node, inline, className, children, ...props }: any) => {
+                                  const match = /language-(\w+)/.exec(className || "");
+                                  return !inline && match ? (
+                                    <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
+                                      <code className={className} {...props}>
+                                        {children}
+                                      </code>
+                                    </pre>
+                                  ) : (
+                                    <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>
+                                      {children}
+                                    </code>
+                                  );
+                                },
+                                p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
+                                ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                                ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                                li: ({ children }: any) => <li className="text-sm">{children}</li>,
+                                h1: ({ children }: any) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                                h2: ({ children }: any) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                                h3: ({ children }: any) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                                strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
+                                em: ({ children }: any) => <em className="italic">{children}</em>,
+                                blockquote: ({ children }: any) => (
+                                  <blockquote className={`border-l-4 ${isDark ? "border-gray-600" : "border-gray-400"} pl-3 italic my-2`}>{children}</blockquote>
+                                ),
+                              }}
+                            >
+                              {msg.text}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                        )}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
-                )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className={`text-center mt-4 ${isDark ? "text-gray-500" : "text-gray-600"}`}>Ask the AI for a hint or to explain a concept!</p>
+          )}
+          {isAiLoading && (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs">
+                AI
+              </div>
+              <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+                <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
               </div>
             </div>
-            <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiHash /> Invite Code
-              </h3>
-              <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
-              <div className="flex items-center gap-2">
-                <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{user.roomId || '...'}</p>
-                <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
-                  {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
-                </button>
-              </div>
+          )}
+          <div ref={aiChatEndRef} />
+        </div>
+        <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+          <input
+            type="text"
+            value={aiInput}
+            onChange={(e) => setAiInput(e.target.value)}
+            placeholder="Chat with the AI..."
+            className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+            disabled={isAiLoading}
+          />
+          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
+            <AiOutlineSend size={20} />
+          </button>
+        </form>
+      </div>
+    );
+
+    const roomInfoPanel = (
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
+        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+          <FiUsers /> Room
+        </h2>
+        <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+          <div>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              <FiUsers /> Members
+            </h3>
+            <div className="space-y-3">
+              {connectedUsers.length > 0 ? (
+                connectedUsers.map((u: any) => (
+                  <div key={u.id} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
+                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                      {u.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
+                      <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
+              )}
+            </div>
+          </div>
+          <div>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              <FiHash /> Invite Code
+            </h3>
+            <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
+            <div className="flex items-center gap-2">
+              <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{user.roomId || "..."}</p>
+              <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
+                {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
+              </button>
             </div>
           </div>
         </div>
-      );
-    }
+      </div>
+    );
 
-    return null;
+    return (
+      <div className="flex flex-col flex-1 min-h-0 h-full">
+        {renderPersistentChatPanel()}
+        {activePanel === "ai" && aiAssistantPanel}
+        {activePanel === "info" && roomInfoPanel}
+      </div>
+    );
   };
 
   const handleAiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading) return;
 
-    const userMessage: AiMessage = { sender: 'user', text: aiInput, userName: user.name };
+    const userMessage: AiMessage = {
+      sender: 'user',
+      text: aiInput,
+      userName: user.name,
+      userId: user.id,
+    };
     setAiMessages(prev => [...prev, userMessage]);
     const currentAiInput = aiInput;
     setAiInput("");
@@ -656,11 +850,16 @@ const CodeEditor: React.FC = () => {
         body: JSON.stringify(aiSubmission),
       });
 
+      const data = await res.json().catch(() => ({} as { error?: string; aiResponseText?: string }));
       if (!res.ok) {
-        throw new Error(`Server responded with status: ${res.status}`);
+        throw new Error(
+          typeof data.error === "string" && data.error
+            ? data.error
+            : `Server error (${res.status})`
+        );
       }
 
-      const { aiResponseText } = await res.json();
+      const aiResponseText = data.aiResponseText;
       const aiMessage: AiMessage = {
         sender: 'ai',
         text: aiResponseText || "Sorry, I couldn't generate a response.",
@@ -676,7 +875,18 @@ const CodeEditor: React.FC = () => {
       }
     } catch (error) {
       console.error("Error communicating with AI service:", error);
-      setAiMessages(prev => [...prev, { sender: 'ai', text: "Error connecting to the AI assistant via the server." }]);
+      const networkHint =
+        "Could not reach the API server. If you use your machine's LAN URL in the browser, ensure the backend is running on port 3000 on that machine.";
+      const m = error instanceof Error ? error.message : "";
+      const looksLikeNetworkFailure =
+        error instanceof TypeError ||
+        m === "Failed to fetch" ||
+        m.includes("NetworkError") ||
+        m.includes("Load failed");
+      const text = looksLikeNetworkFailure
+        ? networkHint
+        : m || "Error connecting to the AI assistant via the server.";
+      setAiMessages(prev => [...prev, { sender: 'ai', text }]);
     } finally {
       setIsAiLoading(false);
     }
@@ -702,9 +912,12 @@ const CodeEditor: React.FC = () => {
   };
 
   const handleLanguageChange = (value: string) => {
+    setCode((prev: string) => adaptStarterCommentToLanguage(prev, value));
     setLanguage(value);
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "language", language: value, roomId: user.roomId }));
-  }
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "language", language: value, roomId: user.roomId }));
+    }
+  };
 
   const handleButtonStatus = (value: string, isLoading: boolean) => {
     setCurrentButtonState(value);
@@ -828,20 +1041,41 @@ const CodeEditor: React.FC = () => {
               {isSidebarOpen ? <FiChevronsLeft size={18} /> : <FiChevronsRight size={18} />}
             </button>
             <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>CoLearn Live</span>
-            <span className={`text-xs px-2 py-1 rounded-full ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}>Room {user.roomId || "..."}</span>
+            <span
+              className={`text-xs px-2 py-1 rounded-full max-w-[14rem] truncate ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}
+              title={user.roomId || params.roomId || undefined}
+            >
+              {roomDisplayName || `Room ${user.roomId || params.roomId || "..."}`}
+            </span>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <button
+              type="button"
               onClick={() => handlePanelToggle("ai")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
+              title={aiPanelUnread ? "New AI messages" : undefined}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
             >
               <FiBox /> AI Tutor
+              {aiPanelUnread && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
             </button>
             <button
+              type="button"
               onClick={() => handlePanelToggle("chat")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              title={chatPanelUnread ? "New chat messages" : undefined}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiMessageCircle /> Chat
+              {chatPanelUnread && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
             </button>
             <button
               onClick={() => handlePanelToggle("info")}
@@ -861,18 +1095,73 @@ const CodeEditor: React.FC = () => {
             </button>
           </div>
           <div className="flex items-center gap-3">
-            <select
-              value={language}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className={`${isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-300 text-gray-900 shadow-sm hover:border-blue-400"} border px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200`}
-            >
-              <option value="javascript">JavaScript</option>
-              <option value="python">Python</option>
-              <option value="cpp">C++</option>
-              <option value="java">Java</option>
-              <option value="rust">Rust</option>
-              <option value="go">Go</option>
-            </select>
+            <div className="relative" ref={langMenuRef}>
+              {(() => {
+                const current = LANGUAGE_OPTIONS.find((o) => o.value === language) ?? LANGUAGE_OPTIONS[0];
+                const CurrentIcon = current.Icon;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setLangMenuOpen((o) => !o)}
+                      aria-haspopup="listbox"
+                      aria-expanded={langMenuOpen}
+                      className={`flex items-center gap-2 min-w-[11rem] border px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ${
+                        isDark
+                          ? "bg-gray-800 border-gray-700 text-white hover:border-gray-500"
+                          : "bg-white border-gray-300 text-gray-900 shadow-sm hover:border-blue-400"
+                      }`}
+                    >
+                      <CurrentIcon className={`shrink-0 ${current.iconClass}`} size={20} aria-hidden />
+                      <span className="flex-1 text-left text-sm font-medium">{current.label}</span>
+                      <FiChevronDown
+                        size={18}
+                        className={`shrink-0 opacity-70 transition-transform ${langMenuOpen ? "rotate-180" : ""}`}
+                        aria-hidden
+                      />
+                    </button>
+                    {langMenuOpen && (
+                      <ul
+                        role="listbox"
+                        className={`absolute right-0 mt-1 py-1 min-w-full w-max rounded-md border shadow-lg z-50 ${
+                          isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                        }`}
+                      >
+                        {LANGUAGE_OPTIONS.map((opt) => {
+                          const OptIcon = opt.Icon;
+                          const selected = language === opt.value;
+                          return (
+                            <li key={opt.value} role="presentation">
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={selected}
+                                onClick={() => {
+                                  handleLanguageChange(opt.value);
+                                  setLangMenuOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
+                                  selected
+                                    ? isDark
+                                      ? "bg-blue-900/50 text-white"
+                                      : "bg-blue-50 text-blue-900"
+                                    : isDark
+                                      ? "text-gray-200 hover:bg-gray-700/80"
+                                      : "text-gray-800 hover:bg-gray-100"
+                                }`}
+                              >
+                                <OptIcon className={`shrink-0 ${opt.iconClass}`} size={20} aria-hidden />
+                                {opt.label}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
             <button
               onClick={handleSubmit}
               className={`bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md shadow-lg transition-all flex items-center justify-center gap-2 ${isLoading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105 active:scale-95'} duration-200`}
@@ -917,6 +1206,38 @@ const CodeEditor: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
+      {collabCoachKind && collabCoachKey && typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) !== "1" && (
+        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-start justify-center pt-4 px-4">
+          <div
+            className={`max-w-lg w-full sm:w-auto px-4 py-3 rounded-xl shadow-2xl border text-sm pointer-events-auto flex items-start gap-3 ${isDark ? "bg-amber-950/50 border-amber-800 text-amber-100" : "bg-amber-50 border-amber-200 text-amber-950"}`}
+            role="status"
+          >
+            <FiHeart className="shrink-0 mt-0.5 text-amber-500" size={20} aria-hidden />
+            <div className="flex-1 min-w-0 text-sm leading-relaxed">
+              <p className="font-semibold mb-1">You’ve got this</p>
+              {collabCoachKind === "slow" ? (
+                <p>
+                  Your learning profile suggests taking a steady pace — that is a strength. Use the AI tutor and chat when you need them.
+                </p>
+              ) : (
+                <p>
+                  Practice tests have been tough lately — try smaller steps and ask the AI for hints. {connectedUsers.length > 0 ? "Someone else is in the room if you want to collaborate." : ""}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (collabCoachKey) sessionStorage.setItem(collabCoachKey, "1");
+                setCollabCoachKind(null);
+              }}
+              className={`shrink-0 text-xs font-semibold underline ${isDark ? "text-amber-300" : "text-amber-800"}`}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

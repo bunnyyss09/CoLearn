@@ -6,9 +6,16 @@ import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import { themeAtom } from "../atoms/themeAtom";
 import { IP_ADDRESS } from "../Globle";
 import { useNavigate } from "react-router-dom";
-import { AiOutlineDelete } from "react-icons/ai";
+import { AiOutlineDelete, AiOutlineEdit } from "react-icons/ai";
+import { FiMenu, FiX, FiSettings, FiUser, FiPlus } from "react-icons/fi";
+import { motion, AnimatePresence } from "framer-motion";
 
-type Room = { roomId: string; members?: string[]; ownerId?: string };
+type Room = {
+  roomId: string;
+  displayName?: string | null;
+  members?: string[];
+  ownerId?: string;
+};
 
 interface SidebarProps {
   showRooms?: boolean;
@@ -26,8 +33,28 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isOpen, setIsOpen] = useRecoilState(sidebarOpenAtom);
   const theme = useRecoilValue(themeAtom);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [deleteConfirmRoomId, setDeleteConfirmRoomId] = useState<string | null>(null);
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [noticeTitle, setNoticeTitle] = useState("Notice");
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const navigate = useNavigate();
   const isDark = theme === "dark";
+
+  const modalOpen = deleteConfirmRoomId !== null || noticeMessage !== null;
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDeleteConfirmRoomId(null);
+        setNoticeMessage(null);
+        setNoticeTitle("Notice");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [modalOpen]);
 
   useEffect(() => {
     const fetchRooms = async () => {
@@ -55,21 +82,70 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleRoomClick = (roomId: string, e?: React.MouseEvent) => {
-    // Prevent delete action if clicking delete button
-    if (e && (e.target as HTMLElement).closest('.delete-button')) {
+    if (e && (e.target as HTMLElement).closest(".room-actions, .room-edit-input")) {
       return;
     }
-    
-    // Navigate to dashboard with room selected
     navigate(`/dashboard/${roomId}`);
   };
 
-  const handleDeleteRoom = async (roomId: string, e: React.MouseEvent) => {
+  const handleDeleteRoom = (roomId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    if (!confirm(`Are you sure you want to delete Room ${roomId}? This action cannot be undone.`)) {
+    setEditingRoomId(null);
+    setDeleteConfirmRoomId(roomId);
+  };
+
+  const beginRenameRoom = (e: React.MouseEvent, room: Room) => {
+    e.stopPropagation();
+    setEditingRoomId(room.roomId);
+    setEditDraft(room.displayName || "");
+  };
+
+  const cancelRenameRoom = () => {
+    setEditingRoomId(null);
+    setEditDraft("");
+  };
+
+  const commitRenameRoom = async (roomId: string) => {
+    if (editingRoomId !== roomId) return;
+    const trimmed = editDraft.trim();
+    const prev = (rooms.find((r) => r.roomId === roomId)?.displayName || "").trim();
+    if (trimmed === prev) {
+      cancelRenameRoom();
       return;
     }
+    try {
+      const res = await fetch(`http://${IP_ADDRESS}:3000/room/${roomId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({ displayName: trimmed }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setNoticeTitle("Could not rename room");
+        setNoticeMessage((err as { error?: string }).error || "Failed to rename room.");
+        return;
+      }
+      const data = await res.json();
+      const nextName = data.room?.displayName as string | undefined;
+      setRooms((prevRooms) =>
+        prevRooms.map((r) =>
+          r.roomId === roomId ? { ...r, displayName: nextName } : r
+        )
+      );
+      cancelRenameRoom();
+    } catch {
+      setNoticeTitle("Could not rename room");
+      setNoticeMessage("Failed to rename room. Please try again.");
+    }
+  };
+
+  const performDeleteRoom = async () => {
+    const roomId = deleteConfirmRoomId;
+    if (!roomId) return;
+    setDeleteConfirmRoomId(null);
 
     try {
       const res = await fetch(`http://${IP_ADDRESS}:3000/room/${roomId}`, {
@@ -78,39 +154,165 @@ const Sidebar: React.FC<SidebarProps> = ({
       });
 
       if (res.ok) {
-        // Remove room from list
-        setRooms(prev => prev.filter(r => r.roomId !== roomId));
+        setRooms((prev) => prev.filter((r) => r.roomId !== roomId));
       } else {
-        const errorData = await res.json();
-        alert(errorData.error || "Failed to delete room");
+        const errorData = await res.json().catch(() => ({}));
+        setNoticeTitle("Could not delete room");
+        setNoticeMessage(
+          (errorData as { error?: string }).error || "Failed to delete room."
+        );
       }
     } catch (error) {
       console.error("Error deleting room:", error);
-      alert("Failed to delete room. Please try again.");
+      setNoticeTitle("Could not delete room");
+      setNoticeMessage("Failed to delete room. Please try again.");
     }
   };
 
+  const panelClass = isDark
+    ? "bg-surface-800 border border-surface-700"
+    : "bg-white border border-surface-200";
+
   return (
     <>
+      {/* Delete confirm modal */}
+      <AnimatePresence>
+        {deleteConfirmRoomId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-room-title"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setDeleteConfirmRoomId(null);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className={`max-w-md w-full p-6 rounded-2xl shadow-xl ${panelClass}`}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <h3
+                id="delete-room-title"
+                className={`text-lg font-display font-bold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}
+              >
+                Delete room?
+              </h3>
+              <p className={`text-sm ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+                Are you sure you want to delete{" "}
+                <strong>
+                  {rooms.find((r) => r.roomId === deleteConfirmRoomId)?.displayName?.trim() ||
+                    `Room ${deleteConfirmRoomId}`}
+                </strong>
+                ? This cannot be undone.
+              </p>
+              <p className={`text-xs font-mono mt-2 mb-6 ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                ID: {deleteConfirmRoomId}
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmRoomId(null)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    isDark
+                      ? "bg-surface-700 hover:bg-surface-700/80 text-gray-200"
+                      : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={performDeleteRoom}
+                  className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
+                >
+                  Delete room
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Notice modal */}
+      <AnimatePresence>
+        {noticeMessage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="notice-title"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) {
+                setNoticeMessage(null);
+                setNoticeTitle("Notice");
+              }
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className={`max-w-md w-full p-6 rounded-2xl shadow-xl ${panelClass}`}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <h3
+                id="notice-title"
+                className={`text-lg font-display font-bold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}
+              >
+                {noticeTitle}
+              </h3>
+              <p className={`text-sm mb-6 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+                {noticeMessage}
+              </p>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoticeMessage(null);
+                    setNoticeTitle("Notice");
+                  }}
+                  className="px-4 py-2 rounded-xl text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white transition-colors"
+                >
+                  OK
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Toggle button (mobile) */}
       <button
-        className={`fixed top-4 left-4 z-40 ${isDark ? "bg-gray-900 text-white border-gray-700" : "bg-white text-gray-900 border-gray-300"} px-3 py-2 rounded-md border lg:hidden`}
+        className={`fixed top-4 left-4 z-40 ${isDark ? "bg-surface-800 text-white border-surface-700" : "bg-white text-gray-900 border-surface-200"} p-2.5 rounded-xl border shadow-lg lg:hidden transition-colors hover:bg-brand-600 hover:text-white hover:border-brand-600`}
         onClick={() => setIsOpen((v) => !v)}
+        aria-label={isOpen ? "Close menu" : "Open menu"}
       >
-        {isOpen ? "Close" : "Menu"}
+        {isOpen ? <FiX size={20} /> : <FiMenu size={20} />}
       </button>
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50/95 backdrop-blur-sm border-blue-200 shadow-xl"} border-r-2 p-4 flex flex-col transform transition-all duration-200
+        className={`fixed inset-y-0 left-0 z-30 w-64 ${isDark ? "bg-surface-900 border-surface-700" : "bg-white/95 backdrop-blur-md border-surface-200 shadow-xl"} border-r p-4 flex flex-col transform transition-all duration-300 ease-out
   ${isOpen
-            ? "translate-x-0 lg:translate-x-0 lg:static" // Open: Static position (takes up space)
-            : "-translate-x-full lg:hidden"              // Closed: Hidden on desktop (removes space)
+            ? "translate-x-0 lg:translate-x-0 lg:static"
+            : "-translate-x-full lg:hidden"
           }`}
       >
-        <div className="flex items-center justify-between mb-4">
+        {/* Account header with gradient accent */}
+        <div className={`flex items-center justify-between mb-5 pb-4 border-b ${isDark ? "border-surface-700" : "border-surface-200"}`}>
           <div>
-            <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>Account</p>
+            <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-500"}`}>Account</p>
             <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
               {auth.user ? auth.user.name : "Guest"}
             </p>
@@ -118,7 +320,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {auth.isAuthenticated && (
             <button
               onClick={handleLogout}
-              className="text-xs px-3 py-1 rounded-full bg-red-600 hover:bg-red-700 text-white"
+              className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 transition-colors"
             >
               Logout
             </button>
@@ -126,53 +328,104 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {showRooms && (
-          <div className="mb-4">
-            <h2 className={`text-sm font-semibold mb-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+          <div className="mb-4 flex-1 overflow-hidden flex flex-col">
+            <h2 className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isDark ? "text-gray-500" : "text-gray-500"}`}>
               Your Rooms
             </h2>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-1.5 flex-1 overflow-y-auto pr-1">
               {auth.isAuthenticated ? (
                 <>
                   {rooms.length > 0 ? (
                     rooms.map((room) => {
                       const isOwner = room.ownerId === auth.user?.id;
+                      const title =
+                        room.displayName?.trim() || `Room ${room.roomId}`;
+                      const isEditing = editingRoomId === room.roomId;
                       return (
-                        <div
+                        <motion.div
+                          layout
                           key={room.roomId}
-                          className={`relative group w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200 ${isDark ? "bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700" : "bg-white border-gray-300 text-gray-800 hover:bg-blue-100 shadow-sm"} border hover:scale-[1.02] active:scale-[0.98]`}
+                          className={`relative group w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${isDark ? "bg-surface-800 border-surface-700 text-gray-200 hover:bg-surface-700 hover:border-brand-500/30" : "bg-surface-50 border-surface-200 text-gray-800 hover:bg-brand-50 hover:border-brand-200 shadow-sm"} border`}
                         >
-                          <button
-                            onClick={(e) => handleRoomClick(room.roomId, e)}
-                            className="w-full text-left"
-                          >
-                            <p className="font-semibold">Room {room.roomId}</p>
-                            <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-                              Members: {room.members?.length ?? 1}
-                            </p>
-                          </button>
-                          {isOwner && (
+                          {isEditing ? (
+                            <div className="pr-14">
+                              <input
+                                type="text"
+                                className={`room-edit-input w-full px-2 py-1 rounded-lg border text-sm ${isDark ? "bg-surface-900 border-surface-700 text-white" : "bg-white border-gray-300 text-gray-900"}`}
+                                maxLength={80}
+                                value={editDraft}
+                                autoFocus
+                                onChange={(e) => setEditDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void commitRenameRoom(room.roomId);
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    cancelRenameRoom();
+                                  }
+                                }}
+                                onBlur={() => void commitRenameRoom(room.roomId)}
+                              />
+                              <p className={`text-xs font-mono mt-1 truncate ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                                {room.roomId}
+                              </p>
+                            </div>
+                          ) : (
                             <button
-                              onClick={(e) => handleDeleteRoom(room.roomId, e)}
-                              className="delete-button absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-600 text-red-500 hover:text-white"
-                              title="Delete room"
+                              type="button"
+                              onClick={(e) => handleRoomClick(room.roomId, e)}
+                              className="w-full text-left pr-14"
                             >
-                              <AiOutlineDelete size={16} />
+                              <p className="font-semibold truncate" title={title}>
+                                {title}
+                              </p>
+                              <p className={`text-xs font-mono truncate ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                                {room.roomId}
+                              </p>
+                              <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                                Members: {room.members?.length ?? 1}
+                              </p>
                             </button>
                           )}
-                        </div>
+                          {isOwner && !isEditing && (
+                            <div className="room-actions absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={(e) => beginRenameRoom(e, room)}
+                                className="p-1.5 rounded-lg hover:bg-brand-500/20 text-brand-400 hover:text-brand-300 transition-colors"
+                                title="Rename room"
+                              >
+                                <AiOutlineEdit size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteRoom(room.roomId, e)}
+                                className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                                title="Delete room"
+                              >
+                                <AiOutlineDelete size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </motion.div>
                       );
                     })
                   ) : (
-                    <p className={`text-xs mb-2 ${isDark ? "text-gray-500" : "text-gray-600"}`}>
+                    <p className={`text-xs mb-2 ${isDark ? "text-gray-500" : "text-gray-500"}`}>
                       You are not part of any rooms yet.
                     </p>
                   )}
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => navigate("/")}
-                    className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isDark ? "bg-blue-600 hover:bg-blue-500 text-white" : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"} hover:scale-[1.02] active:scale-[0.98]`}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 bg-gradient-to-r from-brand-600 to-accent-500 hover:from-brand-500 hover:to-accent-400 text-white shadow-lg hover:shadow-glow-brand flex items-center justify-center gap-2"
                   >
-                    + Create / Join Room
-                  </button>
+                    <FiPlus size={16} />
+                    Create / Join Room
+                  </motion.button>
                 </>
               ) : (
                 <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-600"}`}>
@@ -183,17 +436,19 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        <div className={`mt-auto pt-4 ${isDark ? "border-gray-700" : "border-blue-200"} border-t-2 flex flex-col gap-2`}>
+        <div className={`mt-auto pt-4 ${isDark ? "border-surface-700" : "border-surface-200"} border-t flex flex-col gap-2`}>
           <button
-            className={`w-full px-3 py-2 rounded-lg transition-all duration-200 border ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700" : "bg-white hover:bg-blue-100 text-gray-800 border-gray-300 shadow-sm"} text-sm text-left hover:scale-[1.02] active:scale-[0.98]`}
+            className={`w-full px-3 py-2.5 rounded-xl transition-all duration-200 border ${isDark ? "bg-surface-800 hover:bg-surface-700 text-gray-300 border-surface-700" : "bg-surface-50 hover:bg-brand-50 text-gray-700 border-surface-200"} text-sm text-left flex items-center gap-3 hover:border-brand-500/30`}
             onClick={onOpenSettings}
           >
+            <FiSettings size={16} className="text-brand-400" />
             Settings
           </button>
           <button
-            className={`w-full px-3 py-2 rounded-lg transition-all duration-200 border ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700" : "bg-white hover:bg-blue-100 text-gray-800 border-gray-300 shadow-sm"} text-sm text-left hover:scale-[1.02] active:scale-[0.98]`}
+            className={`w-full px-3 py-2.5 rounded-xl transition-all duration-200 border ${isDark ? "bg-surface-800 hover:bg-surface-700 text-gray-300 border-surface-700" : "bg-surface-50 hover:bg-brand-50 text-gray-700 border-surface-200"} text-sm text-left flex items-center gap-3 hover:border-brand-500/30`}
             onClick={onOpenAccount}
           >
+            <FiUser size={16} className="text-brand-400" />
             Account
           </button>
         </div>
@@ -203,5 +458,3 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 export default Sidebar;
-
-

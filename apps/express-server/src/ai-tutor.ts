@@ -54,60 +54,70 @@ function modeInstructions(aiMode?: string): string {
 }
 
 /**
- * Constructs the full prompt for the AI based on the user's code and question.
- * Includes module summary, checkpoint context, and input/output for learning modules.
+ * Builds the tutor prompt using string concatenation only.
+ * User-supplied text must never be embedded in JS template literals — content like
+ * `${foo}` in their code or markdown would be evaluated and throw ReferenceError.
  */
 function constructUserQuery(data: AiTutorData): string {
-    const moduleContext = (data.moduleTitle || data.moduleSummary)
-        ? `
-Current learning module: ${data.moduleTitle || "N/A"}
-${data.moduleSummary ? `Module context:\n${data.moduleSummary}\n` : ""}`
-        : "";
+    const parts: string[] = [baseSystemPrompt, "", modeInstructions(data.aiMode)];
 
-    const checkpointContext = data.checkpointTitle
-        ? `
-Current checkpoint:
-Title: ${data.checkpointTitle}
-Type: ${data.checkpointType || "unknown"}
-Description:
-${data.checkpointDescription || "No detailed description provided."}
-`
-        : "";
+    if (data.userLearningContext) {
+        parts.push(
+            "",
+            "--- LEARNER PROFILE (use this to personalize your help) ---",
+            data.userLearningContext,
+            "-----------------------------------------------------------"
+        );
+    }
 
-    const learnerContext = data.userLearningContext
-        ? `
---- LEARNER PROFILE (use this to personalize your help) ---
-${data.userLearningContext}
------------------------------------------------------------
-`
-        : "";
+    if (data.moduleTitle || data.moduleSummary) {
+        parts.push(
+            "",
+            "Current learning module: " + (data.moduleTitle || "N/A")
+        );
+        if (data.moduleSummary) {
+            parts.push("Module context:", data.moduleSummary);
+        }
+    }
 
-    return `${baseSystemPrompt}
+    if (data.checkpointTitle) {
+        parts.push(
+            "",
+            "Current checkpoint:",
+            "Title: " + data.checkpointTitle,
+            "Type: " + (data.checkpointType || "unknown"),
+            "Description:",
+            data.checkpointDescription || "No detailed description provided."
+        );
+    }
 
-${modeInstructions(data.aiMode)}
-${learnerContext}
-${moduleContext}
-${checkpointContext}
+    const lang = data.language;
+    const codeBlock = "```" + lang + "\n" + data.code + "\n```";
+    const inputBlock =
+        "```\n" + (data.input ?? "No input provided.") + "\n```";
+    const outputBlock =
+        "```\n" + (data.output ?? "No output yet.") + "\n```";
 
-Here is the current situation:
-Student name: ${data.userName || "Student"}
-Language: ${data.language}
-Code:
-\`\`\`${data.language}
-${data.code}
-\`\`\`
-Input given to the code:
-\`\`\`
-${data.input ?? "No input provided."}
-\`\`\`
-Output from the code:
-\`\`\`
-${data.output ?? "No output yet."}
-\`\`\`
+    parts.push(
+        "",
+        "Here is the current situation:",
+        "Student name: " + (data.userName || "Student"),
+        "Language: " + lang,
+        "Code:",
+        codeBlock,
+        "Input given to the code:",
+        inputBlock,
+        "Output from the code:",
+        outputBlock,
+        "",
+        "My question is: " + data.userQuery
+    );
 
-My question is: ${data.userQuery}
-`;
+    return parts.join("\n");
 }
+
+const PRIMARY_MODEL = "gemini-2.5-flash";
+const FALLBACK_MODEL = "gemini-2.0-flash";
 
 /**
  * Calls the Gemini API to get an AI-generated tutor response.
@@ -115,27 +125,41 @@ My question is: ${data.userQuery}
  * @returns A promise that resolves to the AI's text response.
  */
 export async function getAiTutorResponse(data: AiTutorData): Promise<string> {
-    if (!process.env.GEMINI_API_KEY) {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) {
         throw new Error("GEMINI_API_KEY is not configured in environment variables.");
     }
-    const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = ai.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const userQuery = constructUserQuery(data);
-
+    const ai = new GoogleGenerativeAI(apiKey);
+    let userQuery: string;
     try {
+        userQuery = constructUserQuery(data);
+    } catch (e) {
+        console.error("constructUserQuery failed:", e);
+        throw new Error("Failed to build the tutor prompt from the request.");
+    }
+
+    async function tryModel(modelName: string): Promise<string> {
+        const model = ai.getGenerativeModel({ model: modelName });
         const result = await model.generateContent(userQuery);
-        const response = await result.response;
+        const response = result.response;
         const aiResponseText = response.text();
-        
+
         if (!aiResponseText) {
             console.error("AI response was empty:", response);
             return "Sorry, I couldn't generate a helpful response right now. The AI might be having an issue.";
         }
-
         return aiResponseText;
+    }
 
-    } catch (error) {
-        console.error("Error in getAiTutorResponse:", error);
-        return "Sorry, the AI tutor is temporarily unavailable. Please try again later.";
+    try {
+        return await tryModel(PRIMARY_MODEL);
+    } catch (primaryErr) {
+        console.error(`Error with model ${PRIMARY_MODEL}:`, primaryErr);
+        try {
+            return await tryModel(FALLBACK_MODEL);
+        } catch (fallbackErr) {
+            console.error(`Error with model ${FALLBACK_MODEL}:`, fallbackErr);
+            return "Sorry, the AI tutor is temporarily unavailable. Please try again later.";
+        }
     }
 }

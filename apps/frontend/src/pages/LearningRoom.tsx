@@ -27,6 +27,8 @@ import {
   FiPlay,
   FiCheck,
   FiHash,
+  FiHeart,
+  FiBook,
 } from "react-icons/fi";
 import { AiOutlineSend, AiOutlineLoading3Quarters, AiOutlineCopy, AiOutlineCheck } from "react-icons/ai";
 
@@ -82,6 +84,8 @@ type AiMessage = {
   sender: "user" | "ai";
   text: string;
   userName?: string;
+  /** Present for user messages so layout can show mine vs others. */
+  userId?: string;
 };
 
 type ActivePanel = "chat" | "ai" | "info";
@@ -97,6 +101,9 @@ const LearningRoom: React.FC = () => {
   const [connectedUsers, setConnectedUsers] =
     useRecoilState<any[]>(connectedUsersAtom);
   const [activePanel, setActivePanel] = useState<ActivePanel>("ai");
+  const [aiPanelUnread, setAiPanelUnread] = useState(false);
+  const [chatPanelUnread, setChatPanelUnread] = useState(false);
+  const lastSeenAiCountRef = useRef(0);
   const [chatId, setChatId] = useState<string>("");
   const theme = useRecoilValue(themeAtom);
   const isDark = theme === "dark";
@@ -116,7 +123,6 @@ const LearningRoom: React.FC = () => {
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [explanation, setExplanation] = useState("");
   const [reflection, setReflection] = useState("");
-  const [navError, setNavError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ allPassed: boolean; results?: Array<{ passed: boolean; expectedOutput: string; actualOutput: string }> } | null>(null);
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -127,6 +133,7 @@ const LearningRoom: React.FC = () => {
   const aiChatEndRef = useRef<HTMLDivElement>(null);
 
   const [chatReady, setChatReady] = useState(false);
+  const [roomDisplayName, setRoomDisplayName] = useState<string | null>(null);
   const [runInput, setRunInput] = useState("");
   const [runOutput, setRunOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -138,7 +145,11 @@ const LearningRoom: React.FC = () => {
   const [isCheckpointsCollapsed, setIsCheckpointsCollapsed] = useState(false);
   const [isIoCollapsed, setIsIoCollapsed] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  
+  const [roomOwnerId, setRoomOwnerId] = useState<string | null>(null);
+  const [cohortMemberCount, setCohortMemberCount] = useState(0);
+  /** Supportive coach strip: slow pace or struggling tests (from your profile only). */
+  const [coachKind, setCoachKind] = useState<"slow" | "tests" | null>(null);
+
   // Debounce timer for code sync
   const codeSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Flag to prevent echo when receiving remote code
@@ -160,8 +171,11 @@ const LearningRoom: React.FC = () => {
     setIsSidebarOpen(false);
   }, []);
 
+  const isModuleComplete =
+    !!module && currentCheckpointIndex >= module.checkpoints.length;
+
   const currentCheckpoint: Checkpoint | undefined =
-    module?.checkpoints[currentCheckpointIndex];
+    isModuleComplete ? undefined : module?.checkpoints[currentCheckpointIndex];
 
   const currentAiMode: AiMode = currentCheckpoint?.aiMode;
 
@@ -179,6 +193,24 @@ const LearningRoom: React.FC = () => {
   useEffect(() => {
     aiChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [aiMessages]);
+
+  useEffect(() => {
+    if (activePanel === "ai") {
+      setAiPanelUnread(false);
+      lastSeenAiCountRef.current = aiMessages.length;
+      return;
+    }
+    if (aiMessages.length > lastSeenAiCountRef.current) {
+      setAiPanelUnread(true);
+    }
+    lastSeenAiCountRef.current = aiMessages.length;
+  }, [aiMessages, activePanel]);
+
+  useEffect(() => {
+    if (activePanel === "chat") {
+      setChatPanelUnread(false);
+    }
+  }, [activePanel]);
 
 
   // Fetch learning state (module + per-user progress).
@@ -213,6 +245,12 @@ const LearningRoom: React.FC = () => {
         if (data.room?.currentCheckpointIndex != null) {
           setCurrentCheckpointIndex(data.room.currentCheckpointIndex);
         }
+        if (data.room?.ownerId != null) {
+          setRoomOwnerId(String(data.room.ownerId));
+        }
+        if (Array.isArray(data.room?.members)) {
+          setCohortMemberCount(data.room.members.length);
+        }
         if (data.progress) {
           setProgress({
             currentCheckpointIndex:
@@ -231,20 +269,41 @@ const LearningRoom: React.FC = () => {
             setChatId(roomData.room.chatId);
             setChatReady(true);
           }
+          if (roomData.room) {
+            const dn = roomData.room.displayName;
+            setRoomDisplayName(typeof dn === "string" && dn.trim() ? dn.trim() : null);
+          }
         }
         const dataRes = await fetch(
           `http://${IP_ADDRESS}:3000/room/${roomIdFromUrl}/data`
         );
         if (dataRes.ok) {
-          const data = await dataRes.json();
-          if (data.aiMessages && Array.isArray(data.aiMessages)) {
+          const roomPayload = await dataRes.json();
+          if (roomPayload.aiMessages && Array.isArray(roomPayload.aiMessages)) {
             setAiMessages(
-              data.aiMessages.map((m: { sender: string; text: string; userName?: string }) => ({
-                sender: m.sender as "user" | "ai",
-                text: m.text,
-                userName: m.userName,
-              }))
+              roomPayload.aiMessages.map(
+                (m: { sender: string; text: string; userName?: string; userId?: string }) => ({
+                  sender: m.sender as "user" | "ai",
+                  text: m.text,
+                  userName: m.userName,
+                  userId: m.userId,
+                })
+              )
             );
+          }
+          // Seed current checkpoint from shared room code (one blob per room) so return visits match the editor.
+          const mod = data.module as LearningModule | undefined;
+          const rawIdx = data.room?.currentCheckpointIndex ?? 0;
+          if (mod?.checkpoints?.length && rawIdx < mod.checkpoints.length) {
+            const cp = mod.checkpoints[rawIdx];
+            const src = roomPayload.code;
+            const placeholder =
+              typeof src === "string" &&
+              (src.includes("Write your code here") || src.trim() === "// Write your code here...");
+            if (typeof src === "string" && cp?.checkpointId && !placeholder) {
+              setCode(src);
+              setCodeByCheckpoint((prev) => ({ ...prev, [cp.checkpointId]: src }));
+            }
           }
         }
       } catch (e) {
@@ -253,6 +312,44 @@ const LearningRoom: React.FC = () => {
     };
     fetchLearningState();
   }, [auth.token, roomIdFromUrl]);
+
+  const coachStorageKey =
+    roomIdFromUrl != null && roomIdFromUrl !== ""
+      ? `colearn-encourage-dismiss-${roomIdFromUrl}`
+      : null;
+
+  useEffect(() => {
+    setCoachKind(null);
+  }, [roomIdFromUrl]);
+
+  useEffect(() => {
+    if (!auth.token || !user.id || !roomIdFromUrl || !coachStorageKey) return;
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(coachStorageKey) === "1") {
+      return;
+    }
+    let cancelled = false;
+    fetch(`http://${IP_ADDRESS}:3000/learning-profile/${user.id}`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const p = data.profile;
+        if (!p) return;
+        const pace = p.learningPace as string | undefined;
+        const tp = p.metrics?.totalTestPasses ?? 0;
+        const tf = p.metrics?.totalTestFailures ?? 0;
+        const total = tp + tf;
+        const rate = total > 0 ? (100 * tp) / total : null;
+        if (pace === "slow") setCoachKind("slow");
+        else if (total >= 3 && rate !== null && rate < 50) setCoachKind("tests");
+        else setCoachKind(null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.token, user.id, roomIdFromUrl, coachStorageKey]);
 
   // Apply starter code when checkpoint changes; preserve code if we've seen this checkpoint before
   useEffect(() => {
@@ -275,15 +372,19 @@ const LearningRoom: React.FC = () => {
     setRunOutput([]);
     setTestCaseOutputs({});
     setActiveIOTab("custom");
-    setNavError(null);
+    setToast(null);
   }, [currentCheckpoint?.checkpointId]);
 
-  // Save code whenever it changes (for the current checkpoint)
+  // Save code whenever it changes for whichever checkpoint is currently active.
+  // Do NOT depend on checkpoint id here: when the checkpoint changes, the first render still
+  // has the previous checkpoint's code — syncing [code, checkpointId] would write that code
+  // into the new checkpoint's slot and wipe the correct saved code when you go back (Prev).
   useEffect(() => {
     if (!currentCheckpoint) return;
     const checkpointId = currentCheckpoint.checkpointId;
-    setCodeByCheckpoint(prev => ({ ...prev, [checkpointId]: code }));
-  }, [code, currentCheckpoint?.checkpointId]);
+    setCodeByCheckpoint((prev) => ({ ...prev, [checkpointId]: code }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- omit checkpointId so we don't copy old code into the new checkpoint slot on navigation
+  }, [code]);
 
   // Ensure there is a WebSocket connection for this room and
   // wire up basic listeners for users / code sync.
@@ -345,11 +446,14 @@ const LearningRoom: React.FC = () => {
       if (data.type === "aiMessages" && Array.isArray(data.messages)) {
         setAiMessages((prev) => [
           ...prev,
-          ...data.messages.map((m: { sender: string; text: string; userName?: string }) => ({
-            sender: m.sender as "user" | "ai",
-            text: m.text,
-            userName: m.userName,
-          })),
+          ...data.messages.map(
+            (m: { sender: string; text: string; userName?: string; userId?: string }) => ({
+              sender: m.sender as "user" | "ai",
+              text: m.text,
+              userName: m.userName,
+              userId: m.userId,
+            })
+          ),
         ]);
       }
       // In learning room we never override language from WebSocket—it comes from the module (Python).
@@ -423,7 +527,6 @@ const LearningRoom: React.FC = () => {
     if (!roomIdFromUrl || !auth.token) return;
     setIsRunningTests(true);
     setTestResult(null);
-    setNavError(null);
     try {
       const res = await fetch(
         `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/run-tests`,
@@ -442,10 +545,11 @@ const LearningRoom: React.FC = () => {
         results: data.results,
       });
       if (!res.ok || !data.allPassed) {
-        setNavError(data.error || "Some tests failed.");
         setToast({
           type: "error",
-          message: "Some tests failed. Fix the code or ask the AI guide for help.",
+          message:
+            data.error ||
+            "Some tests did not pass. Fix the code or ask the AI guide for help.",
         });
       } else {
         setToast({
@@ -455,7 +559,6 @@ const LearningRoom: React.FC = () => {
       }
     } catch (e) {
       console.error("Run tests failed", e);
-      setNavError("Failed to run tests.");
       setToast({
         type: "error",
         message: "Failed to run tests. Please try again.",
@@ -477,7 +580,12 @@ const LearningRoom: React.FC = () => {
     if (!aiInput.trim() || isAiLoading || !currentCheckpoint) return;
 
     const userName = user.name || "Learner";
-    const userMsg: AiMessage = { sender: "user", text: aiInput, userName };
+    const userMsg: AiMessage = {
+      sender: "user",
+      text: aiInput,
+      userName,
+      userId: user.id,
+    };
     setAiMessages((prev) => [...prev, userMsg]);
     const currentInput = aiInput;
     setAiInput("");
@@ -514,10 +622,15 @@ const LearningRoom: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submission),
       });
+      const data = await res.json().catch(() => ({} as { error?: string; aiResponseText?: string }));
       if (!res.ok) {
-        throw new Error(`Server responded with status ${res.status}`);
+        throw new Error(
+          typeof data.error === "string" && data.error
+            ? data.error
+            : `Server error (${res.status})`
+        );
       }
-      const { aiResponseText } = await res.json();
+      const aiResponseText = data.aiResponseText;
       const aiMsg: AiMessage = { sender: "ai", text: aiResponseText || "No response." };
       setAiMessages((prev) => [...prev, aiMsg]);
       if (socket && socket.readyState === WebSocket.OPEN) {
@@ -525,9 +638,19 @@ const LearningRoom: React.FC = () => {
       }
     } catch (err) {
       console.error("AI tutor error", err);
+      const networkHint =
+        "Could not reach the API server. If you opened the app using your computer's LAN address (not localhost), the app will use that same host for the API—ensure the Express server is running and reachable on port 3000.";
+      const m = err instanceof Error ? err.message : "";
+      const looksLikeNetworkFailure =
+        err instanceof TypeError ||
+        m === "Failed to fetch" ||
+        m.includes("NetworkError") ||
+        m.includes("Load failed");
       const errMsg: AiMessage = {
         sender: "ai",
-        text: "Error connecting to the AI guide. Please try again.",
+        text: looksLikeNetworkFailure
+          ? networkHint
+          : m || "Error connecting to the AI guide. Please try again.",
       };
       setAiMessages((prev) => [...prev, errMsg]);
       if (socket && socket.readyState === WebSocket.OPEN) {
@@ -545,7 +668,6 @@ const LearningRoom: React.FC = () => {
   const handleAdvanceCheckpoint = async () => {
     if (!roomIdFromUrl) return;
     setIsAdvancing(true);
-    setNavError(null);
     try {
       const res = await fetch(
         `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/next`,
@@ -561,30 +683,39 @@ const LearningRoom: React.FC = () => {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.room?.currentCheckpointIndex != null) {
         const nextIndex = data.room.currentCheckpointIndex;
-        setCurrentCheckpointIndex(nextIndex);
-        if (nextIndex === currentCheckpointIndex && module) {
-          setNavError(
-            `Already at the last checkpoint (${currentCheckpointIndex + 1}/${module.checkpoints.length}).`
-          );
+        const leaving = currentCheckpoint;
+        if (leaving) {
+          setCodeByCheckpoint((prev) => ({
+            ...prev,
+            [leaving.checkpointId]: code,
+          }));
+        }
+        if (data.room.moduleCompleted && roomIdFromUrl) {
+          navigate(`/code/${roomIdFromUrl}`, { replace: true });
+        } else {
+          setCurrentCheckpointIndex(nextIndex);
         }
       } else if (!res.ok && data?.error) {
         if (data.results && !data.allPassed) {
-          const failed = data.results.filter((r: { passed: boolean }) => !r.passed);
-          setNavError(
-            `${data.error} Failed: ${failed.map((r: { input: string; actualOutput: string; expectedOutput: string }) =>
-              `expected "${r.expectedOutput}" got "${r.actualOutput}"`
-            ).join("; ")}`
-          );
+          setToast({
+            type: "error",
+            message:
+              data.error ||
+              "Some tests did not pass. Check the Input / Output panel for details.",
+          });
         } else {
-          setNavError(data.error || "Cannot advance checkpoint.");
+          setToast({
+            type: "error",
+            message: data.error || "Cannot advance checkpoint.",
+          });
         }
         console.warn("Cannot advance checkpoint:", data);
       } else if (!res.ok) {
-        setNavError("Cannot advance checkpoint.");
+        setToast({ type: "error", message: "Cannot advance checkpoint." });
       }
     } catch (e) {
       console.error("Failed to advance checkpoint", e);
-      setNavError("Failed to advance checkpoint.");
+      setToast({ type: "error", message: "Failed to advance checkpoint." });
     } finally {
       setIsAdvancing(false);
     }
@@ -624,9 +755,12 @@ const LearningRoom: React.FC = () => {
 
   const renderCheckpointList = () => {
     if (!module) return null;
-    const completedCount = currentCheckpointIndex;
     const totalCount = module.checkpoints.length;
-    const progressPercent = Math.round((completedCount / totalCount) * 100);
+    const completedCount = Math.min(currentCheckpointIndex, totalCount);
+    const progressPercent =
+      totalCount > 0
+        ? Math.round((completedCount / totalCount) * 100)
+        : 0;
     
     return (
       <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-lg"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
@@ -663,9 +797,10 @@ const LearningRoom: React.FC = () => {
             
             <ul className="space-y-1.5">
               {module.checkpoints.map((cp, index) => {
-                const isActive = index === currentCheckpointIndex;
-                const isPast = index < currentCheckpointIndex;
-                const isLocked = index > currentCheckpointIndex;
+                const isActive =
+                  !isModuleComplete && index === currentCheckpointIndex;
+                const isPast =
+                  isModuleComplete || index < currentCheckpointIndex;
                 return (
                   <li
                     key={cp.checkpointId}
@@ -708,6 +843,64 @@ const LearningRoom: React.FC = () => {
   };
 
   const renderCenterPanel = () => {
+    if (!module) {
+      return (
+        <div className={`flex-1 flex items-center justify-center rounded-lg border ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"}`}>
+          <p className={isDark ? "text-gray-400" : "text-gray-600"}>Loading module...</p>
+        </div>
+      );
+    }
+
+    if (isModuleComplete) {
+      return (
+        <div className="flex flex-col h-full gap-3 min-h-0">
+          <div
+            className={`flex-1 flex flex-col items-center justify-center text-center rounded-xl border-2 p-8 gap-4 ${isDark ? "bg-gray-900 border-green-800/80" : "bg-green-50 border-green-200"}`}
+          >
+            <div className={`rounded-full p-4 ${isDark ? "bg-green-900/40" : "bg-green-100"}`}>
+              <FiCheck className="text-green-500" size={40} aria-hidden />
+            </div>
+            <div>
+              <h2 className={`text-xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+                Module complete
+              </h2>
+              <p className={`mt-2 text-sm max-w-md ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                You finished all checkpoints in <strong>{module.title}</strong>. You can review the last step, open the collaboration editor, or view the room dashboard.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <button
+                type="button"
+                onClick={handlePreviousCheckpoint}
+                disabled={isAdvancing}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border ${isDark ? "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700" : "bg-white border-gray-300 text-gray-800 hover:bg-gray-50"} disabled:opacity-40`}
+              >
+                ← Review last checkpoint
+              </button>
+              {roomIdFromUrl && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/code/${roomIdFromUrl}`)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Open collaboration editor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dashboard/${roomIdFromUrl}`)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${isDark ? "border-gray-600 text-gray-200 hover:bg-gray-800" : "border-gray-300 text-gray-800 hover:bg-gray-100"}`}
+                  >
+                    Room dashboard
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (!currentCheckpoint) {
       return (
         <div className={`flex-1 flex items-center justify-center rounded-lg border ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"}`}>
@@ -716,7 +909,13 @@ const LearningRoom: React.FC = () => {
       );
     }
 
-    const isNextDisabled = isAdvancing;
+    const lastCheckpointIndex = module.checkpoints.length - 1;
+    const isLastCheckpoint = currentCheckpointIndex === lastCheckpointIndex;
+    const lastHasTests = (currentCheckpoint.testCases?.length ?? 0) > 0;
+    const lastStepReady = !lastHasTests || testResult?.allPassed === true;
+    const primaryAdvanceDisabled =
+      isAdvancing || (isLastCheckpoint && !lastStepReady);
+
     const isPrevDisabled = isAdvancing || currentCheckpointIndex === 0;
 
     const handleRunCodeForTab = async (tabId: string) => {
@@ -787,21 +986,20 @@ const LearningRoom: React.FC = () => {
               </button>
               <button
                 onClick={handleAdvanceCheckpoint}
-                disabled={isNextDisabled}
+                disabled={primaryAdvanceDisabled}
+                title={
+                  isLastCheckpoint && !lastStepReady && lastHasTests
+                    ? "Run all tests and pass them to finish this module."
+                    : undefined
+                }
                 className="px-4 py-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1 transition-all shadow-md hover:shadow-lg"
               >
                 {isAdvancing && <AiOutlineLoading3Quarters className="animate-spin" />}
-                Next →
+                {isLastCheckpoint ? "Finish" : "Next →"}
               </button>
             </div>
           </div>
         </div>
-
-        {navError && (
-          <div className={`rounded-lg border px-4 py-2 text-sm flex-shrink-0 ${isDark ? "bg-red-900/30 border-red-900 text-red-200" : "bg-red-50 border-red-200 text-red-700"}`}>
-            {navError}
-          </div>
-        )}
 
         {/* Code Editor */}
         <div className={`flex-1 border-2 rounded-lg overflow-hidden shadow-2xl transition-all duration-200 ${isDark ? "border-gray-800" : "border-gray-300 bg-gray-50"}`}>
@@ -830,76 +1028,122 @@ const LearningRoom: React.FC = () => {
           
           {!isIoCollapsed && (
             <div className={`p-3 border-t ${isDark ? "border-gray-800" : "border-blue-200"}`}>
-              {/* Tabs */}
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <div className="flex gap-1 flex-1 min-w-0 overflow-x-auto">
-                  <button
-                    onClick={() => setActiveIOTab("custom")}
-                    className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-md transition-all ${
-                      activeIOTab === "custom"
-                        ? "bg-blue-600 text-white shadow-md"
-                        : isDark ? "bg-gray-800 text-gray-400 hover:bg-gray-700" : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-                    }`}
-                  >
-                    Custom I/O
-                  </button>
-                  {currentCheckpoint?.testCases?.map((_, index) => {
-                    const result = testResult?.results?.[index];
-                    const passed = result?.passed;
-                    const ran = result !== undefined;
-                    return (
-                      <button
-                        key={`test-${index}`}
-                        onClick={() => setActiveIOTab(`test-${index}`)}
-                        className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-md transition-all flex items-center gap-1 ${
-                          activeIOTab === `test-${index}`
-                            ? "bg-blue-600 text-white shadow-md"
-                            : isDark ? "bg-gray-800 text-gray-400 hover:bg-gray-700" : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-                        }`}
-                      >
-                        Test {index + 1}
-                        {ran && (passed ? <FiCheck className="text-green-400" /> : <span className="text-red-400">✗</span>)}
-                      </button>
-                    );
-                  })}
-                </div>
-                {currentCheckpoint?.testCases && currentCheckpoint.testCases.length > 0 && (
-                  <button
-                    onClick={handleRunTests}
-                    disabled={isRunningTests}
-                    className="px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition-all shadow-md"
-                  >
-                    {isRunningTests && <AiOutlineLoading3Quarters className="animate-spin" />}
-                    Run All Tests
-                  </button>
-                )}
-              </div>
+              {(() => {
+                const ioTestCases = currentCheckpoint?.testCases;
+                const activeTestIdx =
+                  activeIOTab.startsWith("test-") && ioTestCases
+                    ? parseInt(activeIOTab.replace("test-", ""), 10)
+                    : -1;
+                const activeTestValid =
+                  activeTestIdx >= 0 && ioTestCases && activeTestIdx < ioTestCases.length;
+                const activeRunResult =
+                  activeTestValid && testResult?.results
+                    ? testResult.results[activeTestIdx]
+                    : undefined;
+                const activeHasRunResult = activeRunResult !== undefined;
+
+                return (
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <div className="flex gap-1 flex-1 min-w-0 overflow-x-auto">
+                        <button
+                          type="button"
+                          onClick={() => setActiveIOTab("custom")}
+                          className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-md transition-all ${
+                            activeIOTab === "custom"
+                              ? "bg-blue-600 text-white shadow-md"
+                              : isDark
+                                ? "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                          }`}
+                        >
+                          Custom I/O
+                        </button>
+                        {ioTestCases?.map((_, index) => {
+                          const result = testResult?.results?.[index];
+                          const passed = result?.passed;
+                          const ran = result !== undefined;
+                          return (
+                            <button
+                              type="button"
+                              key={`test-${index}`}
+                              onClick={() => setActiveIOTab(`test-${index}`)}
+                              className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-md transition-all flex items-center gap-1 ${
+                                activeIOTab === `test-${index}`
+                                  ? "bg-blue-600 text-white shadow-md"
+                                  : isDark
+                                    ? "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                              }`}
+                            >
+                              Test {index + 1}
+                              {ran && (passed ? <FiCheck className="text-green-400" /> : <span className="text-red-400">✗</span>)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+                        {activeIOTab === "custom" && (
+                          <button
+                            type="button"
+                            onClick={() => handleRunCodeForTab("custom")}
+                            disabled={isRunning}
+                            className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md"
+                          >
+                            {isRunning ? <AiOutlineLoading3Quarters className="animate-spin" size={14} /> : <FiPlay size={14} />}
+                            Run
+                          </button>
+                        )}
+                        {activeIOTab.startsWith("test-") && activeTestValid && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleRunCodeForTab(`test-${activeTestIdx}`)}
+                              disabled={isRunning}
+                              className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md"
+                            >
+                              {isRunning ? <AiOutlineLoading3Quarters className="animate-spin" size={14} /> : <FiPlay size={14} />}
+                              Run
+                            </button>
+                            {activeHasRunResult && (
+                              <span
+                                className={`text-xs font-semibold whitespace-nowrap ${activeRunResult?.passed ? "text-green-500" : "text-red-500"}`}
+                              >
+                                {activeRunResult?.passed ? "✓ Passed" : "✗ Failed"}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {ioTestCases && ioTestCases.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleRunTests}
+                            disabled={isRunningTests}
+                            className="px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition-all shadow-md"
+                          >
+                            {isRunningTests && <AiOutlineLoading3Quarters className="animate-spin" size={14} />}
+                            Run All Tests
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                );
+              })()}
 
               {/* Tab Content */}
               {activeIOTab === "custom" && (
-                <div className="flex gap-3 max-h-40">
-                  <div className="flex-1 flex flex-col gap-1">
+                <div className="flex gap-3 max-h-40 items-stretch">
+                  <div className="flex-1 flex flex-col gap-1 min-h-0">
                     <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Input</label>
                     <textarea
                       value={runInput}
                       onChange={(e) => setRunInput(e.target.value)}
                       placeholder="Enter input..."
-                      className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"} border w-full p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs flex-1 resize-none transition`}
+                      className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"} border w-full p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs flex-1 min-h-0 resize-none transition`}
                     />
                   </div>
-                  <div className="flex flex-col gap-1 items-center justify-center">
-                    <button
-                      onClick={() => handleRunCodeForTab("custom")}
-                      disabled={isRunning}
-                      className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md hover:shadow-lg"
-                    >
-                      {isRunning ? <AiOutlineLoading3Quarters className="animate-spin" /> : <FiPlay size={14} />}
-                      Run
-                    </button>
-                  </div>
-                  <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex-1 flex flex-col gap-1 min-h-0">
                     <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Output</label>
-                    <div className={`${isDark ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-300"} border text-green-600 p-2 rounded-md overflow-y-auto font-mono text-xs flex-1 transition`}>
+                    <div className={`${isDark ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-300"} border text-green-600 p-2 rounded-md overflow-y-auto font-mono text-xs flex-1 min-h-0 transition`}>
                       {runOutput.length > 0 ? runOutput.map((line, i) => <pre key={i} className="whitespace-pre-wrap">{normalizeForDisplay(line)}</pre>) : <p className={isDark ? "text-gray-500" : "text-gray-600"}>No output yet.</p>}
                     </div>
                   </div>
@@ -912,41 +1156,25 @@ const LearningRoom: React.FC = () => {
                 if (!testCase) return null;
                 const testOutput = testCaseOutputs[testIndex] || [];
                 const runResult = testResult?.results?.[testIndex];
-                const passed = runResult?.passed;
                 const hasRunResult = runResult !== undefined;
 
                 return (
-                  <div className="flex gap-3 max-h-40">
-                    <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex gap-3 max-h-40 items-stretch">
+                    <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Input (read-only)</label>
-                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 overflow-y-auto ${isDark ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
+                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 min-h-0 overflow-y-auto ${isDark ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
                         {testCase.input || "(empty)"}
                       </pre>
                     </div>
-                    <div className="flex flex-col gap-1 items-center justify-center">
-                      <button
-                        onClick={() => handleRunCodeForTab(`test-${testIndex}`)}
-                        disabled={isRunning}
-                        className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md"
-                      >
-                        {isRunning ? <AiOutlineLoading3Quarters className="animate-spin" /> : <FiPlay size={14} />}
-                        Run
-                      </button>
-                      {hasRunResult && (
-                        <span className={`text-xs font-semibold ${passed ? "text-green-500" : "text-red-500"}`}>
-                          {passed ? "✓ Passed" : "✗ Failed"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 flex flex-col gap-1">
+                    <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Expected</label>
-                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 overflow-y-auto ${isDark ? "bg-green-900/30 border-green-800 text-green-300" : "bg-green-50 border-green-200 text-green-700"}`}>
+                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 min-h-0 overflow-y-auto ${isDark ? "bg-green-900/30 border-green-800 text-green-300" : "bg-green-50 border-green-200 text-green-700"}`}>
                         {normalizeForDisplay(testCase.expectedOutput)}
                       </pre>
                     </div>
-                    <div className="flex-1 flex flex-col gap-1">
+                    <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-600"}`}>Actual</label>
-                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 overflow-y-auto ${isDark ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
+                      <pre className={`text-xs p-2 rounded-md border font-mono flex-1 min-h-0 overflow-y-auto ${isDark ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
                         {normalizeForDisplay(hasRunResult && runResult ? runResult.actualOutput : testOutput.join("\n")) || "(run to see output)"}
                       </pre>
                     </div>
@@ -987,82 +1215,150 @@ const LearningRoom: React.FC = () => {
     );
   };
 
+  const learningRoomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col flex-1 min-h-0 h-full transition-all duration-200`;
+
+  const renderPersistentLearningChat = () => {
+    if (!chatReady || !chatId || !socket) return null;
+    return (
+      <div
+        className={`${learningRoomChatShellClass} ${activePanel === "chat" ? "flex" : "hidden"}`}
+        aria-hidden={activePanel !== "chat"}
+      >
+        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+          <FiMessageCircle /> Room Chat
+        </h2>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Chat
+            socket={socket}
+            chatId={chatId}
+            userId={user.id}
+            userName={user.name}
+            IP_ADDRESS={IP_ADDRESS}
+            panelActive={activePanel === "chat"}
+            onLiveChatMessage={() => setChatPanelUnread(true)}
+          />
+        </div>
+      </div>
+    );
+  };
+
   const renderRightPanel = () => {
-    if (activePanel === "chat") {
-      return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+    const chatUnavailablePlaceholder =
+      activePanel === "chat" && (!chatReady || !chatId || !socket) ? (
+        <div className={`${learningRoomChatShellClass} flex flex-col flex-1 min-h-0`}>
+          <h2
+            className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${
+              isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"
+            }`}
+          >
             <FiMessageCircle /> Room Chat
           </h2>
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {chatReady && chatId && socket ? (
-              <Chat
-                socket={socket}
-                chatId={chatId}
-                userId={user.id}
-                userName={user.name}
-                IP_ADDRESS={IP_ADDRESS}
-              />
-            ) : (
-              <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
-                Chat is unavailable until the room is fully initialized.
-              </div>
-            )}
+          <div
+            className={`flex-1 flex items-center justify-center text-sm px-4 ${
+              isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"
+            }`}
+          >
+            Chat is unavailable until the room is fully initialized.
           </div>
         </div>
-      );
-    }
+      ) : null;
 
-    if (activePanel === "info") {
-      return (
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiUsers /> Room
-          </h2>
-          <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-            <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiUsers /> Members
-              </h3>
-              <div className="space-y-3">
-                {connectedUsers.length > 0 ? (
-                  connectedUsers.map((u: any) => (
-                    <div key={u.id} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
-                      <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
-                        {u.name?.charAt(0).toUpperCase() || "?"}
-                      </div>
-                      <div>
-                        <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
-                        <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
-                      </div>
+    const roomInfoPanel = (
+      <div
+        className={`flex flex-col flex-1 min-h-0 overflow-hidden ${
+          isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"
+        } border-2 rounded-lg transition-all duration-200`}
+      >
+        <h2
+          className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${
+            isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"
+          }`}
+        >
+          <FiUsers /> Room
+        </h2>
+        <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+          <div>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              <FiUsers /> Members
+            </h3>
+            <div className="space-y-3">
+              {connectedUsers.length > 0 ? (
+                connectedUsers.map((u: any) => (
+                  <div
+                    key={u.id}
+                    className={`flex items-center gap-3 rounded-lg p-3 border ${
+                      isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                      {u.name?.charAt(0).toUpperCase() || "?"}
                     </div>
-                  ))
-                ) : (
-                  <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
-                )}
-              </div>
-            </div>
-            <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiHash /> Invite Code
-              </h3>
-              <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
-              <div className="flex items-center gap-2">
-                <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{roomIdFromUrl || '...'}</p>
-                <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
-                  {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
-                </button>
-              </div>
+                    <div>
+                      <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
+                      <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
+              )}
             </div>
           </div>
+          <div>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              <FiHash /> Invite Code
+            </h3>
+            <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
+            <div className="flex items-center gap-2">
+              <p
+                className={`text-green-600 font-mono ${
+                  isDark ? "bg-gray-800" : "bg-white border border-gray-300"
+                } p-2 rounded select-all w-full truncate`}
+              >
+                {roomIdFromUrl || "..."}
+              </p>
+              <button
+                onClick={handleCopy}
+                className={`${
+                  isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"
+                } p-2 rounded-md transition`}
+              >
+                {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
+              </button>
+            </div>
+          </div>
+          {roomOwnerId && user.id === roomOwnerId && (
+            <div className={`rounded-lg border p-3 ${isDark ? "bg-indigo-950/40 border-indigo-800" : "bg-indigo-50 border-indigo-200"}`}>
+              <h3 className={`text-sm font-semibold mb-1 flex items-center gap-2 ${isDark ? "text-indigo-200" : "text-indigo-900"}`}>
+                <FiBook size={16} /> Facilitating this module?
+              </h3>
+              <p className={`text-xs mb-2 ${isDark ? "text-indigo-300/90" : "text-indigo-800/90"}`}>
+                Open the room dashboard for class-wide participation stats and gentle “who might need a check-in” signals (no grades).
+              </p>
+              <button
+                type="button"
+                onClick={() => roomIdFromUrl && navigate(`/dashboard/${roomIdFromUrl}`)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                Open teaching dashboard
+              </button>
+            </div>
+          )}
         </div>
-      );
-    }
+      </div>
+    );
 
-    // Default: AI Guide
-    return (
-      <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full overflow-hidden transition-all duration-200`}>
-        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+    const aiGuidePanel = (
+      <div
+        className={`flex flex-col flex-1 min-h-0 overflow-hidden ${
+          isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"
+        } border-2 rounded-lg transition-all duration-200`}
+      >
+        <h2
+          className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${
+            isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"
+          }`}
+        >
           <FiBox /> AI Guide
         </h2>
         <div className="flex-grow p-4 overflow-y-auto space-y-4">
@@ -1071,43 +1367,101 @@ const LearningRoom: React.FC = () => {
               Ask the AI guide about this checkpoint. It responds in <strong>{currentAiMode || "tutor"}</strong> mode.
             </p>
           )}
-          {aiMessages.map((msg, idx) => (
-            <div key={idx} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-              {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>}
-              <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-blue-500 text-white rounded-tr-sm border border-blue-600') : (isDark ? 'bg-gray-800' : 'bg-white border border-gray-300')} ${msg.sender === 'user' ? 'text-white' : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
-                {msg.sender === 'ai' ? (
-                  <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code: ({ node, inline, className, children, ...props }: any) => {
-                          const match = /language-(\w+)/.exec(className || '');
-                          return !inline && match ? (
-                            <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
-                              <code className={className} {...props}>{children}</code>
-                            </pre>
-                          ) : (
-                            <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>{children}</code>
-                          );
-                        },
-                        p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
-                        ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                        ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                        li: ({ children }: any) => <li className="text-sm">{children}</li>,
-                      }}
+          {aiMessages.map((msg, idx) => {
+            const isAi = msg.sender === "ai";
+            const isMineUser = msg.sender === "user" && msg.userId === user.id;
+            return (
+              <div
+                key={idx}
+                className={`flex w-full ${isAi || !isMineUser ? "justify-start" : "justify-end"}`}
+              >
+                <div
+                  className={`flex items-end gap-2 max-w-[min(85%,28rem)] ${
+                    isMineUser ? "flex-row-reverse" : "flex-row"
+                  }`}
+                >
+                  {isAi && (
+                    <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs shadow-md">
+                      AI
+                    </div>
+                  )}
+                  {msg.sender === "user" && (
+                    <div
+                      className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
+                        isMineUser ? "bg-blue-500" : "bg-green-500"
+                      }`}
                     >
-                      {msg.text}
-                    </ReactMarkdown>
+                      {(isMineUser ? user.name : msg.userName || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex flex-col min-w-0">
+                    {msg.sender === "user" && !isMineUser && (
+                      <p className={`text-xs font-semibold mb-1 px-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                        {msg.userName || "Teammate"}
+                      </p>
+                    )}
+                    {msg.sender === "user" && isMineUser && (
+                      <p className={`text-xs font-semibold mb-1 px-1 text-right ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                        You
+                      </p>
+                    )}
+                    <div
+                      className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
+                        isAi
+                          ? isDark
+                            ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                            : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                          : isMineUser
+                            ? isDark
+                              ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
+                              : "bg-blue-500 text-white rounded-tr-sm border border-blue-600"
+                            : isDark
+                              ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                              : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                      }`}
+                    >
+                      {isAi ? (
+                        <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code: ({ node, inline, className, children, ...props }: any) => {
+                                const match = /language-(\w+)/.exec(className || "");
+                                return !inline && match ? (
+                                  <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
+                                    <code className={className} {...props}>
+                                      {children}
+                                    </code>
+                                  </pre>
+                                ) : (
+                                  <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              },
+                              p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
+                              ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                              ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                              li: ({ children }: any) => <li className="text-sm">{children}</li>,
+                            }}
+                          >
+                            {msg.text}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {isAiLoading && (
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>
+              <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs">
+                AI
+              </div>
               <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
                 <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
               </div>
@@ -1115,19 +1469,37 @@ const LearningRoom: React.FC = () => {
           )}
           <div ref={aiChatEndRef} />
         </div>
-        <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+        <form
+          onSubmit={handleAiSubmit}
+          className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}
+        >
           <input
             type="text"
             value={aiInput}
             onChange={(e) => setAiInput(e.target.value)}
             placeholder="Ask the AI about this checkpoint..."
-            className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+            className={`${
+              isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"
+            } border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
             disabled={isAiLoading}
           />
-          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+            disabled={isAiLoading || !aiInput.trim()}
+          >
             <AiOutlineSend size={20} />
           </button>
         </form>
+      </div>
+    );
+
+    return (
+      <div className="flex flex-col flex-1 min-h-0 h-full">
+        {chatUnavailablePlaceholder}
+        {!chatUnavailablePlaceholder && renderPersistentLearningChat()}
+        {activePanel === "ai" && aiGuidePanel}
+        {activePanel === "info" && roomInfoPanel}
       </div>
     );
   };
@@ -1140,12 +1512,12 @@ const LearningRoom: React.FC = () => {
     >
       {/* Toast overlay */}
       {toast && (
-        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-start justify-end">
+        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-start justify-center pt-4 px-4">
           <div
-            className={`mt-4 mr-4 px-4 py-2 rounded-lg shadow-lg text-sm pointer-events-auto flex items-start gap-3 ${
+            className={`max-w-lg w-full sm:w-auto px-4 py-3 rounded-xl shadow-2xl border text-sm pointer-events-auto flex items-start gap-3 ${
               toast.type === "success"
-                ? "bg-green-600 text-white"
-                : "bg-red-600 text-white"
+                ? "bg-green-600 text-white border-green-500/80"
+                : "bg-red-600 text-white border-red-500/80"
             }`}
           >
             <span className="flex-1">{toast.message}</span>
@@ -1184,22 +1556,38 @@ const LearningRoom: React.FC = () => {
             <div>
               <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>CoLearn</span>
               <span className={`text-xs px-2 py-1 rounded-full ml-2 ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}>
-                Module · {roomLabel}
+                Module · {roomDisplayName ? `${roomDisplayName} · ${roomLabel}` : roomLabel}
               </span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <button
+              type="button"
               onClick={() => setActivePanel("ai")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
+              title={aiPanelUnread ? "New AI messages" : undefined}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
             >
               <FiBox /> AI Guide
+              {aiPanelUnread && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
             </button>
             <button
+              type="button"
               onClick={() => setActivePanel("chat")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              title={chatPanelUnread ? "New chat messages" : undefined}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiMessageCircle /> Chat
+              {chatPanelUnread && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+                  aria-hidden
+                />
+              )}
             </button>
             <button
               onClick={() => setActivePanel("info")}
@@ -1209,6 +1597,39 @@ const LearningRoom: React.FC = () => {
             </button>
           </div>
         </nav>
+
+        {coachKind && coachStorageKey && typeof sessionStorage !== "undefined" && sessionStorage.getItem(coachStorageKey) !== "1" && (
+          <div
+            className={`flex-shrink-0 flex items-start gap-3 rounded-xl border px-4 py-3 ${isDark ? "bg-amber-950/50 border-amber-800 text-amber-100" : "bg-amber-50 border-amber-200 text-amber-950"}`}
+            role="status"
+          >
+            <FiHeart className="shrink-0 mt-0.5 text-amber-500" size={20} aria-hidden />
+            <div className="flex-1 min-w-0 text-sm leading-relaxed">
+              <p className="font-semibold mb-1">You’ve got this</p>
+              {coachKind === "slow" ? (
+                <p>
+                  Your practice history suggests a steadier pace — that is normal. Use the AI Guide for hints, take breaks, and use room chat if others are online.
+                  {cohortMemberCount > 1 && " Everyone progresses differently; focus on understanding, not speed."}
+                </p>
+              ) : (
+                <p>
+                  Recent tests have been challenging — that usually means you are stretching. Try one small change at a time and ask the AI for a hint (not the full answer) first.
+                  {connectedUsers.length > 0 && " A classmate is online — pairing can help."}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (coachStorageKey) sessionStorage.setItem(coachStorageKey, "1");
+                setCoachKind(null);
+              }}
+              className={`shrink-0 text-xs font-semibold underline ${isDark ? "text-amber-300" : "text-amber-800"}`}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Main Content - Flex Layout */}
         <div className="flex flex-1 gap-4 overflow-hidden flex-col lg:flex-row">
