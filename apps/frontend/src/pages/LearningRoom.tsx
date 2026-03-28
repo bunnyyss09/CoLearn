@@ -84,6 +84,8 @@ type AiMessage = {
   sender: "user" | "ai";
   text: string;
   userName?: string;
+  /** Present for user messages so layout can show mine vs others. */
+  userId?: string;
 };
 
 type ActivePanel = "chat" | "ai" | "info";
@@ -279,11 +281,14 @@ const LearningRoom: React.FC = () => {
           const roomPayload = await dataRes.json();
           if (roomPayload.aiMessages && Array.isArray(roomPayload.aiMessages)) {
             setAiMessages(
-              roomPayload.aiMessages.map((m: { sender: string; text: string; userName?: string }) => ({
-                sender: m.sender as "user" | "ai",
-                text: m.text,
-                userName: m.userName,
-              }))
+              roomPayload.aiMessages.map(
+                (m: { sender: string; text: string; userName?: string; userId?: string }) => ({
+                  sender: m.sender as "user" | "ai",
+                  text: m.text,
+                  userName: m.userName,
+                  userId: m.userId,
+                })
+              )
             );
           }
           // Seed current checkpoint from shared room code (one blob per room) so return visits match the editor.
@@ -441,11 +446,14 @@ const LearningRoom: React.FC = () => {
       if (data.type === "aiMessages" && Array.isArray(data.messages)) {
         setAiMessages((prev) => [
           ...prev,
-          ...data.messages.map((m: { sender: string; text: string; userName?: string }) => ({
-            sender: m.sender as "user" | "ai",
-            text: m.text,
-            userName: m.userName,
-          })),
+          ...data.messages.map(
+            (m: { sender: string; text: string; userName?: string; userId?: string }) => ({
+              sender: m.sender as "user" | "ai",
+              text: m.text,
+              userName: m.userName,
+              userId: m.userId,
+            })
+          ),
         ]);
       }
       // In learning room we never override language from WebSocket—it comes from the module (Python).
@@ -572,7 +580,12 @@ const LearningRoom: React.FC = () => {
     if (!aiInput.trim() || isAiLoading || !currentCheckpoint) return;
 
     const userName = user.name || "Learner";
-    const userMsg: AiMessage = { sender: "user", text: aiInput, userName };
+    const userMsg: AiMessage = {
+      sender: "user",
+      text: aiInput,
+      userName,
+      userId: user.id,
+    };
     setAiMessages((prev) => [...prev, userMsg]);
     const currentInput = aiInput;
     setAiInput("");
@@ -1202,7 +1215,7 @@ const LearningRoom: React.FC = () => {
     );
   };
 
-  const learningRoomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full min-h-0 transition-all duration-200`;
+  const learningRoomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col flex-1 min-h-0 h-full transition-all duration-200`;
 
   const renderPersistentLearningChat = () => {
     if (!chatReady || !chatId || !socket) return null;
@@ -1230,94 +1243,122 @@ const LearningRoom: React.FC = () => {
   };
 
   const renderRightPanel = () => {
-    if (activePanel === "chat") {
-      if (!chatReady || !chatId || !socket) {
-        return (
-          <div className={`${learningRoomChatShellClass} flex flex-col`}>
-            <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-              <FiMessageCircle /> Room Chat
-            </h2>
-            <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
-              Chat is unavailable until the room is fully initialized.
-            </div>
-          </div>
-        );
-      }
-      return renderPersistentLearningChat();
-    }
-
-    if (activePanel === "info") {
-      return (
-        <div className="flex flex-col flex-1 min-h-0 h-full">
-          {renderPersistentLearningChat()}
-        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiUsers /> Room
+    const chatUnavailablePlaceholder =
+      activePanel === "chat" && (!chatReady || !chatId || !socket) ? (
+        <div className={`${learningRoomChatShellClass} flex flex-col flex-1 min-h-0`}>
+          <h2
+            className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${
+              isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"
+            }`}
+          >
+            <FiMessageCircle /> Room Chat
           </h2>
-          <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-            <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiUsers /> Members
-              </h3>
-              <div className="space-y-3">
-                {connectedUsers.length > 0 ? (
-                  connectedUsers.map((u: any) => (
-                    <div key={u.id} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
-                      <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
-                        {u.name?.charAt(0).toUpperCase() || "?"}
-                      </div>
-                      <div>
-                        <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
-                        <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
-                )}
-              </div>
-            </div>
-            <div>
-              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-                <FiHash /> Invite Code
-              </h3>
-              <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
-              <div className="flex items-center gap-2">
-                <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{roomIdFromUrl || '...'}</p>
-                <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
-                  {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
-                </button>
-              </div>
-            </div>
-            {roomOwnerId && user.id === roomOwnerId && (
-              <div className={`rounded-lg border p-3 ${isDark ? "bg-indigo-950/40 border-indigo-800" : "bg-indigo-50 border-indigo-200"}`}>
-                <h3 className={`text-sm font-semibold mb-1 flex items-center gap-2 ${isDark ? "text-indigo-200" : "text-indigo-900"}`}>
-                  <FiBook size={16} /> Facilitating this module?
-                </h3>
-                <p className={`text-xs mb-2 ${isDark ? "text-indigo-300/90" : "text-indigo-800/90"}`}>
-                  Open the room dashboard for class-wide participation stats and gentle “who might need a check-in” signals (no grades).
-                </p>
-                <button
-                  type="button"
-                  onClick={() => roomIdFromUrl && navigate(`/dashboard/${roomIdFromUrl}`)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                  Open teaching dashboard
-                </button>
-              </div>
-            )}
+          <div
+            className={`flex-1 flex items-center justify-center text-sm px-4 ${
+              isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"
+            }`}
+          >
+            Chat is unavailable until the room is fully initialized.
           </div>
         </div>
-        </div>
-      );
-    }
+      ) : null;
 
-    // Default: AI Guide
-    return (
-      <div className="flex flex-col flex-1 min-h-0 h-full">
-        {renderPersistentLearningChat()}
-      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+    const roomInfoPanel = (
+      <div
+        className={`flex flex-col flex-1 min-h-0 overflow-hidden ${
+          isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"
+        } border-2 rounded-lg transition-all duration-200`}
+      >
+        <h2
+          className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${
+            isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"
+          }`}
+        >
+          <FiUsers /> Room
+        </h2>
+        <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+          <div>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              <FiUsers /> Members
+            </h3>
+            <div className="space-y-3">
+              {connectedUsers.length > 0 ? (
+                connectedUsers.map((u: any) => (
+                  <div
+                    key={u.id}
+                    className={`flex items-center gap-3 rounded-lg p-3 border ${
+                      isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                      {u.name?.charAt(0).toUpperCase() || "?"}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
+                      <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
+              )}
+            </div>
+          </div>
+          <div>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              <FiHash /> Invite Code
+            </h3>
+            <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
+            <div className="flex items-center gap-2">
+              <p
+                className={`text-green-600 font-mono ${
+                  isDark ? "bg-gray-800" : "bg-white border border-gray-300"
+                } p-2 rounded select-all w-full truncate`}
+              >
+                {roomIdFromUrl || "..."}
+              </p>
+              <button
+                onClick={handleCopy}
+                className={`${
+                  isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"
+                } p-2 rounded-md transition`}
+              >
+                {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
+              </button>
+            </div>
+          </div>
+          {roomOwnerId && user.id === roomOwnerId && (
+            <div className={`rounded-lg border p-3 ${isDark ? "bg-indigo-950/40 border-indigo-800" : "bg-indigo-50 border-indigo-200"}`}>
+              <h3 className={`text-sm font-semibold mb-1 flex items-center gap-2 ${isDark ? "text-indigo-200" : "text-indigo-900"}`}>
+                <FiBook size={16} /> Facilitating this module?
+              </h3>
+              <p className={`text-xs mb-2 ${isDark ? "text-indigo-300/90" : "text-indigo-800/90"}`}>
+                Open the room dashboard for class-wide participation stats and gentle “who might need a check-in” signals (no grades).
+              </p>
+              <button
+                type="button"
+                onClick={() => roomIdFromUrl && navigate(`/dashboard/${roomIdFromUrl}`)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                Open teaching dashboard
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+
+    const aiGuidePanel = (
+      <div
+        className={`flex flex-col flex-1 min-h-0 overflow-hidden ${
+          isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"
+        } border-2 rounded-lg transition-all duration-200`}
+      >
+        <h2
+          className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${
+            isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"
+          }`}
+        >
           <FiBox /> AI Guide
         </h2>
         <div className="flex-grow p-4 overflow-y-auto space-y-4">
@@ -1326,43 +1367,101 @@ const LearningRoom: React.FC = () => {
               Ask the AI guide about this checkpoint. It responds in <strong>{currentAiMode || "tutor"}</strong> mode.
             </p>
           )}
-          {aiMessages.map((msg, idx) => (
-            <div key={idx} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-              {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>}
-              <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-blue-500 text-white rounded-tr-sm border border-blue-600') : (isDark ? 'bg-gray-800' : 'bg-white border border-gray-300')} ${msg.sender === 'user' ? 'text-white' : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
-                {msg.sender === 'ai' ? (
-                  <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code: ({ node, inline, className, children, ...props }: any) => {
-                          const match = /language-(\w+)/.exec(className || '');
-                          return !inline && match ? (
-                            <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
-                              <code className={className} {...props}>{children}</code>
-                            </pre>
-                          ) : (
-                            <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>{children}</code>
-                          );
-                        },
-                        p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
-                        ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                        ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                        li: ({ children }: any) => <li className="text-sm">{children}</li>,
-                      }}
+          {aiMessages.map((msg, idx) => {
+            const isAi = msg.sender === "ai";
+            const isMineUser = msg.sender === "user" && msg.userId === user.id;
+            return (
+              <div
+                key={idx}
+                className={`flex w-full ${isAi || !isMineUser ? "justify-start" : "justify-end"}`}
+              >
+                <div
+                  className={`flex items-end gap-2 max-w-[min(85%,28rem)] ${
+                    isMineUser ? "flex-row-reverse" : "flex-row"
+                  }`}
+                >
+                  {isAi && (
+                    <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs shadow-md">
+                      AI
+                    </div>
+                  )}
+                  {msg.sender === "user" && (
+                    <div
+                      className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
+                        isMineUser ? "bg-blue-500" : "bg-green-500"
+                      }`}
                     >
-                      {msg.text}
-                    </ReactMarkdown>
+                      {(isMineUser ? user.name : msg.userName || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex flex-col min-w-0">
+                    {msg.sender === "user" && !isMineUser && (
+                      <p className={`text-xs font-semibold mb-1 px-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                        {msg.userName || "Teammate"}
+                      </p>
+                    )}
+                    {msg.sender === "user" && isMineUser && (
+                      <p className={`text-xs font-semibold mb-1 px-1 text-right ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                        You
+                      </p>
+                    )}
+                    <div
+                      className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
+                        isAi
+                          ? isDark
+                            ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                            : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                          : isMineUser
+                            ? isDark
+                              ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
+                              : "bg-blue-500 text-white rounded-tr-sm border border-blue-600"
+                            : isDark
+                              ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                              : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                      }`}
+                    >
+                      {isAi ? (
+                        <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code: ({ node, inline, className, children, ...props }: any) => {
+                                const match = /language-(\w+)/.exec(className || "");
+                                return !inline && match ? (
+                                  <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
+                                    <code className={className} {...props}>
+                                      {children}
+                                    </code>
+                                  </pre>
+                                ) : (
+                                  <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              },
+                              p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
+                              ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                              ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                              li: ({ children }: any) => <li className="text-sm">{children}</li>,
+                            }}
+                          >
+                            {msg.text}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {isAiLoading && (
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>
+              <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs">
+                AI
+              </div>
               <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
                 <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
               </div>
@@ -1370,20 +1469,37 @@ const LearningRoom: React.FC = () => {
           )}
           <div ref={aiChatEndRef} />
         </div>
-        <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+        <form
+          onSubmit={handleAiSubmit}
+          className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}
+        >
           <input
             type="text"
             value={aiInput}
             onChange={(e) => setAiInput(e.target.value)}
             placeholder="Ask the AI about this checkpoint..."
-            className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+            className={`${
+              isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"
+            } border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
             disabled={isAiLoading}
           />
-          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+            disabled={isAiLoading || !aiInput.trim()}
+          >
             <AiOutlineSend size={20} />
           </button>
         </form>
       </div>
+    );
+
+    return (
+      <div className="flex flex-col flex-1 min-h-0 h-full">
+        {chatUnavailablePlaceholder}
+        {!chatUnavailablePlaceholder && renderPersistentLearningChat()}
+        {activePanel === "ai" && aiGuidePanel}
+        {activePanel === "info" && roomInfoPanel}
       </div>
     );
   };

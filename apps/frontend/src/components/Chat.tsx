@@ -130,42 +130,62 @@ const Chat: React.FC<ChatProps> = ({
       <h2 className={`text-xl font-bold p-4 border-b ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>Chat</h2>
       <div className="flex-1 min-h-0 p-4 overflow-y-auto overscroll-contain space-y-3 scroll-smooth">
         {messages.length > 0 ? (
-          messages.map((msg, index) => (
+          messages.map((msg, index) => {
+            const isMine = msg.userId === userId;
+            return (
             <div
               key={index}
-              className={`w-full flex items-start gap-3 animate-fade-in ${
-                msg.userId === userId ? "flex-row-reverse" : "flex-row"
-              }`}
+              className={`w-full flex animate-fade-in ${isMine ? "justify-end" : "justify-start"}`}
             >
-              <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
-                msg.userId === userId ? "bg-blue-500" : "bg-green-500"
-              }`}>
-                {msg.userName.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex flex-col max-w-xs md:max-w-md lg:max-w-sm">
-                {msg.userId !== userId && (
-                  <p className={`text-xs font-semibold mb-1 px-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-                    {msg.userName}
-                  </p>
-                )}
+              <div
+                className={`flex items-end gap-2 max-w-[min(85%,28rem)] ${
+                  isMine ? "flex-row-reverse" : "flex-row"
+                }`}
+              >
                 <div
-                  className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
-                    msg.userId === userId
-                      ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
-                      : isDark ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700" : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                  className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
+                    isMine ? "bg-blue-500" : "bg-green-500"
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
-                  <p className={`text-xs mt-1.5 ${msg.userId === userId ? "text-blue-100" : isDark ? "text-gray-500" : "text-gray-500"}`}>
-                    {new Date(msg.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                  {msg.userName.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  {!isMine && (
+                    <p className={`text-xs font-semibold mb-1 px-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                      {msg.userName}
+                    </p>
+                  )}
+                  {isMine && (
+                    <p className={`text-xs font-semibold mb-1 px-1 text-right ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                      You
+                    </p>
+                  )}
+                  <div
+                    className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
+                      isMine
+                        ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
+                        : isDark
+                          ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
+                          : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                    }`}
+                  >
+                    <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                    <p
+                      className={`text-xs mt-1.5 ${
+                        isMine ? "text-blue-100" : isDark ? "text-gray-500" : "text-gray-500"
+                      }`}
+                    >
+                      {new Date(msg.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         ) : (
           <div className={`flex flex-col items-center justify-center h-full ${isDark ? "text-gray-500" : "text-gray-400 bg-gray-50"}`}>
             <svg className="w-16 h-16 mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">

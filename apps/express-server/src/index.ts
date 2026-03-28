@@ -16,6 +16,7 @@ import Code from "./models/Code";
 import Notes from "./models/Notes";
 import AiMessage from "./models/AiMessage";
 import LearningModule from "./models/LearningModule";
+import LearningProgress from "./models/LearningProgress";
 import { v4 as uuidv4 } from "uuid";
 import { generateToken, authenticateToken, AuthRequest } from "./utils/auth";
 import learningRouter, { ensureDefaultLearningModules } from "./routes/learning";
@@ -422,6 +423,28 @@ app.post("/room/join", authenticateToken, async (req: AuthRequest, res) => {
       await room.save();
     }
 
+    // If room has a learning module, create progress for the user if not exists
+    if (room.moduleId) {
+      const existingProgress = await LearningProgress.findOne({ roomId, moduleId: room.moduleId, userId });
+      if (!existingProgress) {
+        const module = await LearningModule.findOne({ moduleId: room.moduleId });
+        if (module) {
+          const checkpointStatuses = module.checkpoints.map(cp => ({
+            checkpointId: cp.checkpointId,
+            status: 'pending'
+          }));
+          const progress = new LearningProgress({
+            roomId,
+            moduleId: room.moduleId,
+            userId,
+            currentCheckpointIndex: 0,
+            checkpointStatuses
+          });
+          await progress.save();
+        }
+      }
+    }
+
     res.status(200).json({ room });
   } catch (error) {
     console.error("Error joining room:", error);
@@ -791,6 +814,7 @@ app.get("/room/:roomId/data", async (req, res) => {
         sender: msg.sender,
         text: msg.text,
         userName: msg.userName,
+        userId: msg.userId,
       })),
       chatMessages: chatMessages.map(msg => ({
         userId: msg.userId,
