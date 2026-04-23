@@ -23,10 +23,21 @@ interface InteractionMetrics {
   topicsAskedAbout: { topic: string; count: number }[];
 }
 
+export type LearningStyleHint = 'unknown' | 'prefers_scaffolding' | 'prefers_brief';
+
+export interface IPastMistake {
+  topic: string;
+  summary: string;
+  at: Date;
+}
+
 export interface IUserLearningProfile extends Document {
   userId: string;
   weaknesses: WeaknessEntry[];
   strengths: string[];            // Areas where user performs well
+  strongTopics: string[];
+  pastMistakes: IPastMistake[];
+  learningStyle: LearningStyleHint;
   metrics: InteractionMetrics;
   recentErrors: {                 // Last few errors for context
     errorType: string;
@@ -62,6 +73,20 @@ const UserLearningProfileSchema: Schema = new Schema(
     strengths: {
       type: [String],
       default: [],
+    },
+    strongTopics: {
+      type: [String],
+      default: [],
+    },
+    pastMistakes: [{
+      topic: { type: String, required: true },
+      summary: { type: String, required: true },
+      at: { type: Date, default: Date.now },
+    }],
+    learningStyle: {
+      type: String,
+      enum: ['unknown', 'prefers_scaffolding', 'prefers_brief'] as const,
+      default: 'unknown',
     },
     metrics: {
       totalAiQuestions: { type: Number, default: 0 },
@@ -199,8 +224,36 @@ UserLearningProfileSchema.methods.getAiContextSummary = function(): string {
   if (failRate !== null && failRate > 40) {
     summary += `Test failure rate: ${failRate}% - may need extra support. `;
   }
+
+  if (this.strongTopics && this.strongTopics.length > 0) {
+    summary += `Relatively strong in: ${this.strongTopics.slice(0, 5).join(', ')}. `;
+  }
+
+  if (this.pastMistakes && this.pastMistakes.length > 0) {
+    const recent = this.pastMistakes
+      .slice()
+      .sort((a: IPastMistake, b: IPastMistake) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 5);
+    summary += `Recent struggle areas: ${recent
+      .map((m: IPastMistake) => `${m.topic}: ${m.summary}`)
+      .join('; ')}. `;
+  }
+
+  if (this.learningStyle && this.learningStyle !== 'unknown') {
+    summary += `Style hint: ${this.learningStyle.replace(/_/g, ' ')} — adjust explanation length accordingly. `;
+  }
   
   return summary || 'No learning profile data yet.';
+};
+
+UserLearningProfileSchema.methods.recordPastMistake = function (
+  topic: string,
+  summary: string
+) {
+  if (!this.pastMistakes) this.pastMistakes = [];
+  this.pastMistakes.unshift({ topic, summary: summary.slice(0, 200), at: new Date() });
+  this.pastMistakes = this.pastMistakes.slice(0, 15);
+  this.lastUpdated = new Date();
 };
 
 export default mongoose.model<IUserLearningProfile>('UserLearningProfile', UserLearningProfileSchema);

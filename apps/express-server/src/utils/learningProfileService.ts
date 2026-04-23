@@ -119,6 +119,9 @@ export async function getOrCreateProfile(userId: string): Promise<any> {
       userId,
       weaknesses: [],
       strengths: [],
+      strongTopics: [],
+      pastMistakes: [],
+      learningStyle: 'unknown',
       metrics: {
         totalAiQuestions: 0,
         totalCodeSubmissions: 0,
@@ -202,12 +205,23 @@ export async function recordTestResult(
     
     if (passed) {
       profile.metrics.totalTestPasses += 1;
+      if (checkpointTitle) {
+        const t = checkpointTitle.slice(0, 80);
+        if (!(profile as any).strongTopics) (profile as any).strongTopics = [];
+        if (!(profile as any).strongTopics.includes(t)) {
+          (profile as any).strongTopics = [...(profile as any).strongTopics, t].slice(-12);
+        }
+      }
     } else {
       profile.metrics.totalTestFailures += 1;
       
       // Record as a weakness if test failed
       if (checkpointTitle) {
         (profile as any).recordWeakness('checkpoint-failure', `Failed: ${checkpointTitle}`);
+        (profile as any).recordPastMistake(
+          checkpointTitle,
+          'Checkpoint tests did not pass; may need more step-by-step practice here.'
+        );
       }
     }
     
@@ -221,6 +235,11 @@ export async function recordTestResult(
         profile.learningPace = 'fast';
       } else {
         profile.learningPace = 'average';
+      }
+      if (failRate > 0.45 || profile.learningPace === 'slow') {
+        profile.learningStyle = 'prefers_scaffolding';
+      } else if (failRate < 0.15 && total >= 8) {
+        profile.learningStyle = 'prefers_brief';
       }
     }
     

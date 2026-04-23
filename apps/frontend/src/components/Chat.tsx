@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { AiOutlineSend } from "react-icons/ai";
 import { useRecoilValue } from "recoil";
 import { themeAtom } from "../atoms/themeAtom";
@@ -41,24 +41,33 @@ const Chat: React.FC<ChatProps> = ({
   panelActiveRef.current = panelActive;
   onLiveChatMessageRef.current = onLiveChatMessage;
 
-  // Load chat history from backend
-  useEffect(() => {
-    const loadChatHistory = async () => {
-      try {
-        const response = await fetch(`http://${IP_ADDRESS}:3000/chat/${chatId}?limit=50`);
-        if (response.ok) {
-          const data = await response.json();
-          setMessages(data.messages || []);
-        }
-      } catch (error) {
-        console.error("Error loading chat history:", error);
+  const fetchChatHistory = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const response = await fetch(`http://${IP_ADDRESS}:3000/chat/${chatId}?limit=50`);
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(data.messages || []);
       }
-    };
-
-    if (chatId) {
-      loadChatHistory();
+    } catch (error) {
+      console.error("Error loading chat history:", error);
     }
   }, [chatId, IP_ADDRESS]);
+
+  // Load / refresh history when the room or server changes
+  useEffect(() => {
+    void fetchChatHistory();
+  }, [fetchChatHistory]);
+
+  // When the user opens the chat panel, sync from the server in case the tab was in the
+  // background or the panel was hidden so local state had not caught up yet.
+  const prevPanelActive = useRef(panelActive);
+  useEffect(() => {
+    if (panelActive && !prevPanelActive.current) {
+      void fetchChatHistory();
+    }
+    prevPanelActive.current = panelActive;
+  }, [panelActive, fetchChatHistory]);
 
   // Listen for chat messages from WebSocket
   useEffect(() => {
@@ -67,7 +76,17 @@ const Chat: React.FC<ChatProps> = ({
         try {
           const data = JSON.parse(event.data);
           if (data.type === "chat" && data.chatMessage) {
-            setMessages((prev) => [...prev, data.chatMessage]);
+            setMessages((prev) => {
+              const cm = data.chatMessage as ChatMessage;
+              const exists = prev.some(
+                (m) =>
+                  m.message === cm.message &&
+                  m.userId === cm.userId &&
+                  m.timestamp === cm.timestamp
+              );
+              if (exists) return prev;
+              return [...prev, cm];
+            });
             if (!panelActiveRef.current) {
               onLiveChatMessageRef.current?.();
             }

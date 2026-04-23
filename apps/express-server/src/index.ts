@@ -28,6 +28,10 @@ import {
   buildLearnerTeachingRows,
 } from "./utils/learningProfileService";
 import { aggregateRoomMemberActivity } from "./utils/roomActivity";
+import SessionNote from "./models/SessionNote";
+import { userCanAccessRoom } from "./utils/roomAccess";
+import { getSessionNotesContextForAi } from "./utils/sessionNotesForAi";
+import { getUserStatsPayload } from "./utils/userStatsService";
 
 const ROOM_DISPLAY_NAME_MAX = 80;
 
@@ -190,6 +194,15 @@ app.post('/ai-tutor', async (req, res) => {
         }
       }
 
+      let sessionNotesContext = "";
+      if (roomId && String(roomId).trim()) {
+        try {
+          sessionNotesContext = await getSessionNotesContextForAi(String(roomId));
+        } catch (e) {
+          console.error("AI tutor: session notes load failed:", e);
+        }
+      }
+
       const aiResponseText = await getAiTutorResponse({
         userQuery: query,
         language: lang,
@@ -204,6 +217,7 @@ app.post('/ai-tutor', async (req, res) => {
         moduleTitle,
         moduleSummary,
         userLearningContext,
+        sessionNotesContext,
       });
       
       // Save user message and AI response to database if roomId is provided (public room AI chat)
@@ -909,6 +923,108 @@ app.get("/learning-profile/:userId", authenticateToken, async (req: AuthRequest,
   } catch (error) {
     console.error("Error fetching learning profile:", error);
     res.status(500).json({ error: "Failed to fetch learning profile" });
+  }
+});
+
+// ---- Session notes (per-room, multi-note) ----
+app.get(
+  "/session-notes/:roomId",
+  authenticateToken,
+  async (req: AuthRequest, res) => {
+    const { roomId } = req.params;
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const ok = await userCanAccessRoom(req.user.userId, roomId);
+      if (!ok) return res.status(403).json({ error: "Access denied" });
+      const notes = await SessionNote.find({ roomId })
+        .sort({ updatedAt: -1 })
+        .lean();
+      res.status(200).json({
+        notes: notes.map((n) => ({
+          id: n.noteId,
+          content: n.content,
+          createdBy: n.createdBy,
+          lastEditedAt: n.updatedAt,
+        })),
+      });
+    } catch (e) {
+      console.error("session-notes list:", e);
+      res.status(500).json({ error: "Failed to list notes" });
+    }
+  }
+);
+
+app.post("/session-notes", authenticateToken, async (req: AuthRequest, res) => {
+  const { roomId, content } = req.body;
+  if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+  if (!roomId || typeof roomId !== "string")
+    return res.status(400).json({ error: "roomId required" });
+  try {
+    const ok = await userCanAccessRoom(req.user.userId, roomId);
+    if (!ok) return res.status(403).json({ error: "Access denied" });
+    const noteId = uuidv4();
+    const doc = await SessionNote.create({
+      noteId,
+      roomId,
+      content: typeof content === "string" ? content : "",
+      createdBy: req.user.userId,
+      lastEditedBy: req.user.userId,
+    });
+    res.status(201).json({
+      note: {
+        id: doc.noteId,
+        content: doc.content,
+        createdBy: doc.createdBy,
+        lastEditedAt: doc.updatedAt,
+      },
+    });
+  } catch (e) {
+    console.error("session-notes create:", e);
+    res.status(500).json({ error: "Failed to create note" });
+  }
+});
+
+app.put(
+  "/session-notes/:noteId",
+  authenticateToken,
+  async (req: AuthRequest, res) => {
+    const { noteId } = req.params;
+    const { content } = req.body;
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const existing = await SessionNote.findOne({ noteId });
+      if (!existing) return res.status(404).json({ error: "Note not found" });
+      const ok = await userCanAccessRoom(req.user.userId, existing.roomId);
+      if (!ok) return res.status(403).json({ error: "Access denied" });
+      existing.content = typeof content === "string" ? content : existing.content;
+      existing.lastEditedBy = req.user.userId;
+      await existing.save();
+      res.status(200).json({
+        note: {
+          id: existing.noteId,
+          content: existing.content,
+          createdBy: existing.createdBy,
+          lastEditedAt: existing.updatedAt,
+        },
+      });
+    } catch (e) {
+      console.error("session-notes update:", e);
+      res.status(500).json({ error: "Failed to update note" });
+    }
+  }
+);
+
+app.get("/stats/:userId", authenticateToken, async (req: AuthRequest, res) => {
+  const { userId } = req.params;
+  if (!req.user || req.user.userId !== userId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+  try {
+    const stats = await getUserStatsPayload(userId);
+    res.status(200).json({ stats });
+  } catch (e) {
+    console.error("user stats:", e);
+    res.status(500).json({ error: "Failed to fetch stats" });
   }
 });
 

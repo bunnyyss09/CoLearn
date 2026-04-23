@@ -115,3 +115,105 @@
     animation: fade-in 0.2s ease-out;
   }
 }
+
+/* Remote collaborator carets in Monaco (Learning Room) */
+.remote-caret-c0 { color: #ef4444 !important; font-weight: 700; }
+.remote-caret-c1 { color: #22c55e !important; font-weight: 700; }
+.remote-caret-c2 { color: #a855f7 !important; font-weight: 700; }
+.remote-caret-c3 { color: #eab308 !important; font-weight: 700; }
+.remote-caret-c4 { color: #3b82f6 !important; font-weight: 700; }
+.remote-caret-c5 { color: #f97316 !important; font-weight: 700; }
+
+/* Session notes rich text (TipTap) */
+.notes-rtf .ProseMirror {
+  min-height: 12rem;
+  max-width: 100%;
+  font-size: 15px;
+  line-height: 1.6;
+  outline: none;
+}
+.notes-rtf .ProseMirror p {
+  margin: 0.35em 0;
+}
+.notes-rtf .ProseMirror h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0.6em 0 0.35em;
+  line-height: 1.2;
+}
+.notes-rtf .ProseMirror h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0.5em 0 0.3em;
+  line-height: 1.25;
+}
+.notes-rtf .ProseMirror h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0.45em 0 0.3em;
+  line-height: 1.3;
+}
+.notes-rtf--light .ProseMirror h1,
+.notes-rtf--light .ProseMirror h2,
+.notes-rtf--light .ProseMirror h3 {
+  color: #0f172a;
+}
+.notes-rtf--dark .ProseMirror h1,
+.notes-rtf--dark .ProseMirror h2,
+.notes-rtf--dark .ProseMirror h3 {
+  color: #f1f5f9;
+}
+.notes-rtf .ProseMirror ul,
+.notes-rtf .ProseMirror ol {
+  margin: 0.35em 0;
+  padding-left: 1.4rem;
+}
+.notes-rtf .ProseMirror ul ul,
+.notes-rtf .ProseMirror ol ol {
+  margin: 0.15em 0;
+}
+.notes-rtf .ProseMirror a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  color: #6d28d9;
+}
+.notes-rtf--dark .ProseMirror a {
+  color: #a78bfa;
+}
+.notes-rtf .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.4em 0;
+}
+.notes-rtf .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.2em 0;
+}
+.notes-rtf .ProseMirror ul[data-type="taskList"] li > label {
+  flex: 0 0 auto;
+  user-select: none;
+  margin-top: 0.1rem;
+}
+.notes-rtf .ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.notes-rtf .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+.notes-rtf--dark .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: #a1a1aa;
+}
+.notes-rtf .ProseMirror blockquote {
+  border-left: 3px solid #8b5cf6;
+  margin: 0.5em 0;
+  padding: 0.1em 0 0.1em 0.9rem;
+  color: #57534e;
+}
+.notes-rtf--dark .ProseMirror blockquote {
+  color: #a1a1aa;
+  border-left-color: #a78bfa;
+}

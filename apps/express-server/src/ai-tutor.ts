@@ -22,6 +22,8 @@ export interface AiTutorData {
     moduleSummary?: string;
     /** User learning profile context - weaknesses, frequent topics, pace */
     userLearningContext?: string;
+    /** Collaborative session notes for this room */
+    sessionNotesContext?: string;
 }
 
 // System prompt to guide the AI's behavior
@@ -67,6 +69,15 @@ function constructUserQuery(data: AiTutorData): string {
             "--- LEARNER PROFILE (use this to personalize your help) ---",
             data.userLearningContext,
             "-----------------------------------------------------------"
+        );
+    }
+
+    if (data.sessionNotesContext && data.sessionNotesContext.trim()) {
+        parts.push(
+            "",
+            "--- SESSION NOTES (collaborative; use as extra context) ---",
+            data.sessionNotesContext.trim(),
+            "---------------------------------------------------------"
         );
     }
 
