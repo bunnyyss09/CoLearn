@@ -1,4 +1,15 @@
 import React, { useEffect, useState } from "react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { useRecoilValue } from "recoil";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -22,6 +33,7 @@ import {
   FiBarChart2,
   FiCpu,
   FiHeart,
+  FiAward,
 } from "react-icons/fi";
 
 interface LearningProfile {
@@ -128,6 +140,8 @@ const CONTRIBUTION_BAR_COLORS = [
   "bg-cyan-500",
 ];
 
+const PIE_COLORS = ["#3b82f6", "#6366f1", "#10b981", "#f59e0b", "#f43f5e", "#06b6d4"];
+
 const Dashboard: React.FC = () => {
   const { roomId } = useParams<{ roomId?: string }>();
   const auth = useRecoilValue(authAtom);
@@ -150,26 +164,45 @@ const Dashboard: React.FC = () => {
   const [loadingRoomStats, setLoadingRoomStats] = useState(false);
   const [teachingInsights, setTeachingInsights] = useState<TeachingInsights | null>(null);
   const [loadingTeaching, setLoadingTeaching] = useState(false);
+  const [userStats, setUserStats] = useState<{
+    problemsSolved: number;
+    topicsCovered: string[];
+    streak: number;
+    badges: string[];
+    timeSpent: number;
+    weakTopics: string[];
+    progressOverTime: { at: string; problemsSolved: number }[];
+  } | null>(null);
+  const [loadingUserStats, setLoadingUserStats] = useState(false);
 
-  // Fetch user learning profile
+  // Fetch user learning profile + aggregate user stats
   useEffect(() => {
     if (!roomId && auth.user && auth.token) {
       setLoadingProfile(true);
-      fetch(`http://${IP_ADDRESS}:3000/learning-profile/${auth.user.id}`, {
-        headers: { Authorization: `Bearer ${auth.token}` },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setProfile(data.profile || null);
-        })
+      setLoadingUserStats(true);
+      const headers = { Authorization: `Bearer ${auth.token}` };
+      Promise.all([
+        fetch(`http://${IP_ADDRESS}:3000/learning-profile/${auth.user.id}`, { headers })
+          .then((res) => res.json())
+          .then((data) => {
+            setProfile(data.profile || null);
+          }),
+        fetch(`http://${IP_ADDRESS}:3000/stats/${auth.user.id}`, { headers })
+          .then((res) => (res.ok ? res.json() : { stats: null }))
+          .then((data) => {
+            setUserStats(data.stats || null);
+          }),
+      ])
         .catch((err) => {
-          console.error("Error fetching learning profile:", err);
+          console.error("Error fetching profile/stats:", err);
         })
         .finally(() => {
           setLoadingProfile(false);
+          setLoadingUserStats(false);
         });
     } else {
       setLoadingProfile(false);
+      setUserStats(null);
     }
   }, [roomId, auth.user, auth.token]);
 
@@ -350,6 +383,111 @@ const Dashboard: React.FC = () => {
           </div>
           </StaggerItem>
         </StaggerContainer>
+
+        {/* Session-based stats (checkpoints / tests) */}
+        {!loadingUserStats && userStats && (
+          <>
+            <h2 className={`text-lg font-bold ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+              Learning analytics
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+                <p className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+                  {userStats.problemsSolved}
+                </p>
+                <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>Problems solved</p>
+              </div>
+              <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+                <p className={`text-2xl font-bold text-orange-500`}>{userStats.streak}</p>
+                <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>Day streak</p>
+              </div>
+              <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+                <p className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
+                  {Math.floor(userStats.timeSpent / 60)}m
+                </p>
+                <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>Est. practice time</p>
+              </div>
+              <div className={`p-4 rounded-xl ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {userStats.badges.length === 0 && (
+                    <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-500"}`}>—</p>
+                  )}
+                  {userStats.badges.map((b) => (
+                    <span
+                      key={b}
+                      title={b}
+                      className="inline-flex items-center gap-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300"
+                    >
+                      <FiAward size={12} />
+                      {b.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+                <p className={`text-xs mt-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Badges</p>
+              </div>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div
+                className={`p-4 rounded-xl min-h-[260px] ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border border-gray-200 shadow-sm"}`}
+              >
+                <h3 className={`text-sm font-semibold mb-2 ${isDark ? "text-white" : "text-gray-900"}`}>
+                  Topics covered (from checkpoints)
+                </h3>
+                {userStats.topicsCovered.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={userStats.topicsCovered.map((t) => ({ name: t.length > 24 ? `${t.slice(0, 24)}…` : t, value: 1 }))}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={70}
+                        label
+                      >
+                        {userStats.topicsCovered.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                    Pass checkpoint tests in learning rooms to see topics here.
+                  </p>
+                )}
+              </div>
+              <div
+                className={`p-4 rounded-xl min-h-[260px] ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border border-gray-200 shadow-sm"}`}
+              >
+                <h3 className={`text-sm font-semibold mb-2 ${isDark ? "text-white" : "text-gray-900"}`}>
+                  Cumulative problems solved
+                </h3>
+                {userStats.progressOverTime.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart
+                      data={userStats.progressOverTime.map((p) => ({
+                        t: new Date(p.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+                        n: p.problemsSolved,
+                      }))}
+                    >
+                      <XAxis dataKey="t" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="n" stroke="#3b82f6" dot={false} strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                    Your progress will appear as you complete checkpoints.
+                  </p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Areas to Improve & Topics */}
         <div className="grid md:grid-cols-2 gap-4">

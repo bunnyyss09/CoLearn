@@ -26,6 +26,7 @@ import User from "../models/User";
 import { authenticateToken, AuthRequest } from "../utils/auth";
 import { runCodeWithInput, normalizeOutput } from "../utils/runCode";
 import { recordTestResult } from "../utils/learningProfileService";
+import { recordStatsAfterTestRun } from "../utils/userStatsService";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { normalizeForComparison } = require("../utils/outputNormalization");
 const router = Router();
@@ -314,9 +315,13 @@ router.post("/room/:roomId/run-tests", authenticateToken, async (req: AuthReques
     }
     const allPassed = results.every((r) => r.passed);
     
-    // Track test results for user learning profile
+    // Track test results for user learning profile + aggregate stats
     try {
       await recordTestResult(req.user.userId, allPassed, checkpoint.title);
+      await recordStatsAfterTestRun(req.user.userId, {
+        allPassed,
+        topicLabel: checkpoint.title,
+      });
     } catch (trackError) {
       console.error("Error tracking test result:", trackError);
       // Don't fail the request if tracking fails

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRecoilState, useRecoilValue } from 'recoil';
 import { userAtom } from '../atoms/userAtom';
 import { authAtom, AuthUser } from '../atoms/authAtom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { socketAtom } from '../atoms/socketAtom';
 import { IP_ADDRESS } from '../Globle';
+import { createWsClientId } from '../utils/wsClientId';
 import AuthModal from '../components/AuthModal';
 import Sidebar from '../components/Sidebar';
 import AccountModal from '../components/AccountModal';
@@ -43,6 +44,7 @@ const Register = () => {
     const [socket, setSocket] = useRecoilState<WebSocket | null>(socketAtom);
     const [loading, setLoading] = useState<boolean>(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
+    const wsClientIdRef = useRef<string>(createWsClientId());
     const navigate = useNavigate();
     const theme = useRecoilValue(themeAtom);
     const [, setIsSidebarOpen] = useRecoilState(sidebarOpenAtom);
@@ -189,7 +191,9 @@ const Register = () => {
         }
 
         if (!socket || socket.readyState === WebSocket.CLOSED) {
-            const ws = new WebSocket(`ws://${IP_ADDRESS}:5000?roomId=${finalRoomId}&id=${userId}&name=${userName}`);
+            const ws = new WebSocket(
+                `ws://${IP_ADDRESS}:5000?roomId=${finalRoomId}&id=${userId}&name=${userName}&clientId=${encodeURIComponent(wsClientIdRef.current)}`
+            );
             setSocket(ws);
 
             ws.onopen = () => {

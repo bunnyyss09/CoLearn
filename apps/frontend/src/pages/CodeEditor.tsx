@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import MonacoEditor from '@monaco-editor/react';
 import { userAtom } from "../atoms/userAtom";
 import { authAtom } from "../atoms/authAtom";
 import { useRecoilState, useRecoilValue } from "recoil";
 import { AiOutlineLoading3Quarters, AiOutlineSend, AiOutlineCopy, AiOutlineCheck } from "react-icons/ai"; // Import icons
-import { FiMessageCircle, FiUsers, FiHash, FiBox, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiHeart } from "react-icons/fi";
+import { FiMessageCircle, FiUsers, FiHash, FiBox, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiHeart, FiMic, FiHeadphones } from "react-icons/fi";
 import {
   SiCplusplus,
   SiGo,
@@ -17,9 +17,13 @@ import { socketAtom } from "../atoms/socketAtom";
 import { useNavigate, useParams } from "react-router-dom";
 import { connectedUsersAtom } from "../atoms/connectedUsersAtom";
 import { IP_ADDRESS } from "../Globle";
+import { createWsClientId } from "../utils/wsClientId";
 import { adaptStarterCommentToLanguage } from "../utils/editorLanguagePlaceholders";
+import { mergeSelfIntoMemberList, normalizeConnectedUsers, type RoomMember } from "../utils/roomMembers";
 import Chat from "../components/Chat";
+import VoiceChannelBar from "../components/VoiceChannelBar";
 import Sidebar from "../components/Sidebar";
+import { useVoiceSession } from "../hooks/useVoiceSession";
 import AccountModal from "../components/AccountModal";
 import SettingsModal from "../components/SettingsModal";
 import { themeAtom } from "../atoms/themeAtom";
@@ -51,8 +55,6 @@ type AiMessage = {
   // Optional display name for the user who asked the question.
   // Present when sender === 'user'.
   userName?: string;
-  /** Present for user messages so layout can show mine vs others. */
-  userId?: string;
 };
 
 // Type for an Input/Output session
@@ -100,6 +102,10 @@ const CodeEditor: React.FC = () => {
   const codeSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Flag to prevent echo: when we receive code from server, don't re-send it
   const isRemoteUpdateRef = useRef(false);
+  const wsClientIdRef = useRef<string>(createWsClientId());
+  /** Monaco's onDidChangeModelContent runs once; must read latest socket/room from refs. */
+  const socketRef = useRef<WebSocket | null>(null);
+  const codeRoomIdSyncRef = useRef<string | undefined>(undefined);
 
 
   // AI Assistant State
@@ -112,6 +118,8 @@ const CodeEditor: React.FC = () => {
   // multiplayer state
   const [connectedUsers, setConnectedUsers] = useRecoilState<any[]>(connectedUsersAtom);
   const params = useParams();
+  const effectiveUserId = user.id || auth.user?.id || "";
+  const effectiveUserName = user.name || auth.user?.name || "User";
 
   // Chat state
   const [chatId, setChatId] = useState<string>("");
@@ -129,6 +137,33 @@ const CodeEditor: React.FC = () => {
   const [chatPanelUnread, setChatPanelUnread] = useState(false);
   const lastSeenAiCountRef = useRef(0);
   const codeRoomId = user.roomId || params.roomId || "";
+  const peerListForVoice = useMemo(
+    () =>
+      (connectedUsers as { id: string; name: string; clientId?: string }[]).map((u) => ({
+        id: u.id,
+        name: u.name || "Teammate",
+        clientId: u.clientId,
+      })),
+    [connectedUsers]
+  );
+  /** Everyone in the room for the Room panel, including this tab if the server list was missing you. */
+  const membersInRoom = useMemo((): RoomMember[] => {
+    if (!effectiveUserId) {
+      return normalizeConnectedUsers(connectedUsers);
+    }
+    return mergeSelfIntoMemberList(connectedUsers as RoomMember[], {
+      userId: effectiveUserId,
+      name: effectiveUserName,
+      clientId: wsClientIdRef.current,
+    });
+  }, [connectedUsers, effectiveUserId, effectiveUserName]);
+  const voice = useVoiceSession(
+    effectiveUserId || undefined,
+    effectiveUserName,
+    wsClientIdRef.current,
+    socket,
+    peerListForVoice
+  );
   const [collabCoachKind, setCollabCoachKind] = useState<"slow" | "tests" | null>(null);
   const collabCoachKey =
     codeRoomId !== "" ? `colearn-encourage-dismiss-editor-${codeRoomId}` : null;
@@ -140,6 +175,12 @@ const CodeEditor: React.FC = () => {
   useEffect(() => { isLoadingRef.current = isLoading; }, [isLoading]);
   useEffect(() => { ioSessionsRef.current = ioSessions; }, [ioSessions]);
   useEffect(() => { activeIoSessionIdRef.current = activeIoSessionId; }, [activeIoSessionId]);
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
+  useEffect(() => {
+    codeRoomIdSyncRef.current = user.roomId || params.roomId || undefined;
+  }, [user.roomId, params.roomId]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -285,13 +326,12 @@ const CodeEditor: React.FC = () => {
         const ws = new WebSocket(
           `ws://${IP_ADDRESS}:5000?roomId=${effectiveRoomId}&id=${userIdForWs}&name=${encodeURIComponent(
             userNameForWs
-          )}`
+          )}&clientId=${encodeURIComponent(wsClientIdRef.current)}`
         );
         
         ws.onopen = () => {
-          // Once connected, request initial data
-          if (user.id) {
-            ws.send(JSON.stringify({ type: "requestToGetUsers", userId: user.id }));
+          if (userIdForWs) {
+            ws.send(JSON.stringify({ type: "requestToGetUsers", userId: userIdForWs }));
             ws.send(JSON.stringify({ type: "requestForAllData" }));
           }
         };
@@ -319,8 +359,9 @@ const CodeEditor: React.FC = () => {
     
     // Only send messages if socket is OPEN (not CONNECTING or CLOSED)
     if (socket && socket.readyState === WebSocket.OPEN) {
-      if (user.id) {
-        socket.send(JSON.stringify({ type: "requestToGetUsers", userId: user.id }));
+      const syncUserId = user.id || auth.user?.id;
+      if (syncUserId) {
+        socket.send(JSON.stringify({ type: "requestToGetUsers", userId: syncUserId }));
         socket.send(JSON.stringify({ type: "requestForAllData" }));
       }
       socket.onclose = () => {
@@ -338,12 +379,38 @@ const CodeEditor: React.FC = () => {
     };
   }, [socket, params.roomId, user.roomId, user.id, auth.user, setSocket, setUser]);
 
+  // Heal occasional desync: same room list for every tab, including when auth loads after connect.
+  useEffect(() => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    const id = user.id || auth.user?.id;
+    if (!id) return;
+    const send = () => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "requestToGetUsers", userId: id }));
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") send();
+    };
+    send();
+    const t = window.setInterval(send, 20_000);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [socket, user.id, auth.user?.id]);
+
 
   useEffect(() => {
-    if (socket) {
-      socket.onmessage = (event) => {
+    if (!socket) return;
+    // Use addEventListener (not onmessage) so useVoiceSession, Chat, and other
+    // listeners on the same socket all receive every frame reliably.
+    const onWsMessage = (event: MessageEvent) => {
         const data = JSON.parse(event.data);
-        if (data.type === "users") setConnectedUsers(data.users);
+        if (data.type === "users") {
+          setConnectedUsers(normalizeConnectedUsers(data.users));
+        }
         if (data.type === "code") {
           // Set flag to prevent echo when we receive remote code
           isRemoteUpdateRef.current = true;
@@ -380,7 +447,8 @@ const CodeEditor: React.FC = () => {
             isLoading: isLoadingRef.current,
             ioSessions: ioSessionsRef.current,
             activeIoSessionId: activeIoSessionIdRef.current,
-            userId: data.userId
+            userId: data.userId,
+            toClientId: data.clientId,
           }));
         }
 
@@ -403,15 +471,7 @@ const CodeEditor: React.FC = () => {
         // and the AI's reply via WebSocket so everyone sees the same
         // AI conversation in real time.
         if (data.type === "aiMessages" && Array.isArray(data.messages)) {
-          setAiMessages((prev) => [
-            ...prev,
-            ...data.messages.map((m: AiMessage) => ({
-              sender: m.sender,
-              text: m.text,
-              userName: m.userName,
-              userId: m.userId,
-            })),
-          ]);
+          setAiMessages(prev => [...prev, ...data.messages]);
         // When a learning module is started by someone, move everyone to the
         // learning room view for this room.
         }
@@ -421,8 +481,9 @@ const CodeEditor: React.FC = () => {
             navigate(`/learn/${effectiveRoomId}`);
           }
         }
-      };
-    }
+    };
+    socket.addEventListener("message", onWsMessage);
+    return () => socket.removeEventListener("message", onWsMessage);
   }, [socket, user.roomId, params.roomId, navigate, setConnectedUsers]);
 
   useEffect(() => {
@@ -577,25 +638,11 @@ const CodeEditor: React.FC = () => {
     </div>
   );
 
-  const roomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col flex-1 min-h-0 h-full transition-all duration-200`;
+  const roomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full min-h-0 transition-all duration-200`;
 
   /** Keeps Chat mounted while viewing AI / Room so messages and WS listener are not torn down. */
   const renderPersistentChatPanel = () => {
-    if (activePanel === "chat" && !chatId) {
-      return (
-        <div className={`${roomChatShellClass} flex flex-col`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiMessageCircle /> Room Chat
-          </h2>
-          <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
-            Chat is unavailable until the room is fully initialized.
-          </div>
-        </div>
-      );
-    }
-    if (!chatId) {
-      return null;
-    }
+    if (!chatId) return null;
     return (
       <div
         className={`${roomChatShellClass} ${activePanel === "chat" ? "flex" : "hidden"}`}
@@ -606,9 +653,10 @@ const CodeEditor: React.FC = () => {
         </h2>
         <div className="flex-1 min-h-0 overflow-hidden">
           <Chat
+            key="colearn-room-chat"
             socket={socket}
             chatId={chatId}
-            userId={user.id}
+            userId={effectiveUserId || user.id}
             userName={user.name}
             IP_ADDRESS={IP_ADDRESS}
             panelActive={activePanel === "chat"}
@@ -621,201 +669,201 @@ const CodeEditor: React.FC = () => {
 
   const renderPanelContent = () => {
     if (!activePanel) {
-      return renderIoPanelRight();
+      return (
+        <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0 gap-3">
+          {renderPersistentChatPanel()}
+          {renderIoPanelRight()}
+        </div>
+      );
     }
 
-    const aiAssistantPanel = (
-      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-          <FiBox /> AI Assistant
-        </h2>
-        <div className="flex-grow p-4 overflow-y-auto space-y-4">
-          {aiMessages.length > 0 ? (
-            aiMessages.map((msg, index) => {
-              const isAi = msg.sender === "ai";
-              const isMineUser = msg.sender === "user" && msg.userId === user.id;
-              return (
-                <div key={index} className={`flex w-full ${isAi || !isMineUser ? "justify-start" : "justify-end"}`}>
-                  <div className={`flex items-end gap-2 max-w-[min(85%,28rem)] ${isMineUser ? "flex-row-reverse" : "flex-row"}`}>
-                    {isAi && (
-                      <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs shadow-md">
-                        AI
+    if (activePanel === "ai") {
+      return (
+        <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0">
+          {renderPersistentChatPanel()}
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
+          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+            <FiBox /> AI Assistant
+          </h2>
+          <div className="flex-grow p-4 overflow-y-auto space-y-4">
+            {aiMessages.length > 0 ? (
+              aiMessages.map((msg, index) => (
+                <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+                  {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>}
+                  <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-blue-500 text-white rounded-tr-sm border border-blue-600') : (isDark ? 'bg-gray-800' : 'bg-white border border-gray-300')} ${msg.sender === 'user' ? (isDark ? 'text-white' : 'text-white') : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
+                    {msg.sender === 'ai' ? (
+                      <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            code: ({ node, inline, className, children, ...props }: any) => {
+                              const match = /language-(\w+)/.exec(className || '');
+                              return !inline && match ? (
+                                <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
+                                  <code className={className} {...props}>
+                                    {children}
+                                  </code>
+                                </pre>
+                              ) : (
+                                <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            },
+                            p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
+                            ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                            ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                            li: ({ children }: any) => <li className="text-sm">{children}</li>,
+                            h1: ({ children }: any) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                            h2: ({ children }: any) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                            h3: ({ children }: any) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                            strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
+                            em: ({ children }: any) => <em className="italic">{children}</em>,
+                            blockquote: ({ children }: any) => <blockquote className={`border-l-4 ${isDark ? "border-gray-600" : "border-gray-400"} pl-3 italic my-2`}>{children}</blockquote>,
+                          }}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
                       </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                     )}
-                    {msg.sender === "user" && (
-                      <div
-                        className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
-                          isMineUser ? "bg-blue-500" : "bg-green-500"
-                        }`}
-                      >
-                        {(isMineUser ? user.name : msg.userName || "?").charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="flex flex-col min-w-0">
-                      {msg.sender === "user" && !isMineUser && (
-                        <p className={`text-xs font-semibold mb-1 px-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-                          {msg.userName || "Teammate"}
-                        </p>
-                      )}
-                      {msg.sender === "user" && isMineUser && (
-                        <p className={`text-xs font-semibold mb-1 px-1 text-right ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-                          You
-                        </p>
-                      )}
-                      <div
-                        className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
-                          isAi
-                            ? isDark
-                              ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
-                              : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
-                            : isMineUser
-                              ? isDark
-                                ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
-                                : "bg-blue-500 text-white rounded-tr-sm border border-blue-600"
-                              : isDark
-                                ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
-                                : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
-                        }`}
-                      >
-                        {isAi ? (
-                          <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={{
-                                code: ({ node, inline, className, children, ...props }: any) => {
-                                  const match = /language-(\w+)/.exec(className || "");
-                                  return !inline && match ? (
-                                    <pre className={`${isDark ? "bg-gray-900" : "bg-gray-200"} rounded p-2 overflow-x-auto my-2`}>
-                                      <code className={className} {...props}>
-                                        {children}
-                                      </code>
-                                    </pre>
-                                  ) : (
-                                    <code className={`${isDark ? "bg-gray-900" : "bg-gray-200"} px-1 py-0.5 rounded text-xs`} {...props}>
-                                      {children}
-                                    </code>
-                                  );
-                                },
-                                p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
-                                ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                                ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                                li: ({ children }: any) => <li className="text-sm">{children}</li>,
-                                h1: ({ children }: any) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                                h2: ({ children }: any) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                                h3: ({ children }: any) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                                strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
-                                em: ({ children }: any) => <em className="italic">{children}</em>,
-                                blockquote: ({ children }: any) => (
-                                  <blockquote className={`border-l-4 ${isDark ? "border-gray-600" : "border-gray-400"} pl-3 italic my-2`}>{children}</blockquote>
-                                ),
-                              }}
-                            >
-                              {msg.text}
-                            </ReactMarkdown>
-                          </div>
-                        ) : (
-                          <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 </div>
-              );
-            })
-          ) : (
-            <p className={`text-center mt-4 ${isDark ? "text-gray-500" : "text-gray-600"}`}>Ask the AI for a hint or to explain a concept!</p>
-          )}
-          {isAiLoading && (
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs">
-                AI
+              ))
+            ) : (
+              <p className={`text-center mt-4 ${isDark ? "text-gray-500" : "text-gray-600"}`}>Ask the AI for a hint or to explain a concept!</p>
+            )}
+            {isAiLoading && (
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>
+                <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+                  <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
+                </div>
               </div>
-              <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-lg px-4 py-2 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-                <AiOutlineLoading3Quarters className={`animate-spin ${isDark ? "text-gray-400" : "text-gray-600"}`} />
-              </div>
-            </div>
-          )}
-          <div ref={aiChatEndRef} />
+            )}
+            <div ref={aiChatEndRef} />
+          </div>
+          <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+            <input
+              type="text"
+              value={aiInput}
+              onChange={(e) => setAiInput(e.target.value)}
+              placeholder="Chat with the AI..."
+              className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+              disabled={isAiLoading}
+            />
+            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
+              <AiOutlineSend size={20} />
+            </button>
+          </form>
         </div>
-        <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
-          <input
-            type="text"
-            value={aiInput}
-            onChange={(e) => setAiInput(e.target.value)}
-            placeholder="Chat with the AI..."
-            className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
-            disabled={isAiLoading}
-          />
-          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
-            <AiOutlineSend size={20} />
-          </button>
-        </form>
-      </div>
-    );
+        </div>
+      );
+    }
 
-    const roomInfoPanel = (
-      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-          <FiUsers /> Room
-        </h2>
-        <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-          <div>
-            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-              <FiUsers /> Members
-            </h3>
-            <div className="space-y-3">
-              {connectedUsers.length > 0 ? (
-                connectedUsers.map((u: any) => (
-                  <div key={u.id} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
-                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
-                      {u.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{u.name}</p>
-                      <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No other users connected.</p>
-              )}
+    if (activePanel === "chat") {
+      if (!chatId) {
+        return (
+          <div className={`${roomChatShellClass} flex flex-col`}>
+            <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+              <FiMessageCircle /> Room Chat
+            </h2>
+            <div className={`flex-1 flex items-center justify-center text-sm px-4 ${isDark ? "text-gray-500" : "text-gray-600 bg-gray-50"}`}>
+              Chat is unavailable until the room is fully initialized.
             </div>
           </div>
-          <div>
-            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-              <FiHash /> Invite Code
-            </h3>
-            <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
-            <div className="flex items-center gap-2">
-              <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{user.roomId || "..."}</p>
-              <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
-                {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
-              </button>
+        );
+      }
+      return (
+        <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0">
+          {renderPersistentChatPanel()}
+        </div>
+      );
+    }
+
+    if (activePanel === "info") {
+      return (
+        <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0">
+          {renderPersistentChatPanel()}
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
+          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+            <FiUsers /> Room
+          </h2>
+          <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+            <div>
+              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+                <FiUsers /> Members
+              </h3>
+              <div className="space-y-3">
+                {membersInRoom.length > 0 ? (
+                  membersInRoom.map((u: any) => {
+                    const peerK = u.clientId || u.id;
+                    const isMe = u.id === effectiveUserId && u.clientId === wsClientIdRef.current;
+                    const inVoice = isMe
+                      ? voice.inVoice
+                      : !!(voice.remoteInVoice[peerK] || voice.remoteInVoice[u.id]);
+                    const speaking = !!(voice.speaking[peerK] || voice.speaking[u.id]);
+                    return (
+                    <div key={`${u.id}-${u.clientId || "tab"}`} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
+                      <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                        {u.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-semibold flex items-center gap-2 flex-wrap ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+                          {u.name}
+                          {isMe && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-blue-500/40 text-blue-400" title="This device">
+                              you
+                            </span>
+                          )}
+                          {inVoice && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-500 border border-emerald-500/30" title="In voice">
+                              in voice
+                            </span>
+                          )}
+                          {speaking && inVoice && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-500/20 text-green-500" title="Speaking">
+                              <FiMic className="inline mr-0.5" size={10} />
+                              live
+                            </span>
+                          )}
+                        </p>
+                        <p className={`text-xs truncate ${isDark ? "text-gray-400" : "text-gray-600"}`}>{u.id}</p>
+                      </div>
+                    </div>
+                  ); })
+                ) : (
+                  <p className={`text-sm text-center ${isDark ? "text-gray-500" : "text-gray-600"}`}>No one is connected to this room right now.</p>
+                )}
+              </div>
+            </div>
+            <div>
+              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>
+                <FiHash /> Invite Code
+              </h3>
+              <p className={`text-xs mb-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>Share this room code with your teammates</p>
+              <div className="flex items-center gap-2">
+                <p className={`text-green-600 font-mono ${isDark ? "bg-gray-800" : "bg-white border border-gray-300"} p-2 rounded select-all w-full truncate`}>{user.roomId || '...'}</p>
+                <button onClick={handleCopy} className={`${isDark ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-700"} p-2 rounded-md transition`}>
+                  {isCopied ? <AiOutlineCheck /> : <AiOutlineCopy />}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    );
+        </div>
+      );
+    }
 
-    return (
-      <div className="flex flex-col flex-1 min-h-0 h-full">
-        {renderPersistentChatPanel()}
-        {activePanel === "ai" && aiAssistantPanel}
-        {activePanel === "info" && roomInfoPanel}
-      </div>
-    );
+    return null;
   };
 
   const handleAiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading) return;
 
-    const userMessage: AiMessage = {
-      sender: 'user',
-      text: aiInput,
-      userName: user.name,
-      userId: user.id,
-    };
+    const userMessage: AiMessage = { sender: 'user', text: aiInput, userName: user.name };
     setAiMessages(prev => [...prev, userMessage]);
     const currentAiInput = aiInput;
     setAiInput("");
@@ -943,8 +991,12 @@ const CodeEditor: React.FC = () => {
       }
       
       codeSyncTimeoutRef.current = setTimeout(() => {
-        if (socket?.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "code", code: currentCode, roomId: user.roomId }));
+        const s = socketRef.current;
+        const roomId = codeRoomIdSyncRef.current;
+        if (s?.readyState === WebSocket.OPEN && roomId) {
+          s.send(
+            JSON.stringify({ type: "code", code: editor.getValue(), roomId })
+          );
         }
       }, CODE_SYNC_DEBOUNCE_MS);
     });
@@ -1083,6 +1135,28 @@ const CodeEditor: React.FC = () => {
             >
               <FiUsers /> Room
             </button>
+            {effectiveUserId && (user.roomId || params.roomId) && (
+              <a
+                href="#colearn-voice-channel"
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById("colearn-voice-channel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                }}
+                className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 border transition-all duration-200 ${
+                  voice.inVoice
+                    ? isDark
+                      ? "bg-emerald-900/50 border-emerald-700/60 text-emerald-200"
+                      : "bg-emerald-100 border-emerald-300 text-emerald-900"
+                    : isDark
+                      ? "bg-gray-800/80 text-gray-300 border-gray-600 hover:bg-gray-700"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-slate-50"
+                }`}
+                title="Jump to room voice (below the top bar)"
+              >
+                <FiHeadphones className="shrink-0" size={16} aria-hidden />
+                Voice
+              </a>
+            )}
             <button
               onClick={() => {
                 const effectiveRoomId = user.roomId || params.roomId;
@@ -1179,37 +1253,23 @@ const CodeEditor: React.FC = () => {
           </div>
         </nav>
 
-        <div className="flex flex-1 gap-4 overflow-hidden flex-col lg:flex-row">
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <div className={`flex-1 border ${isDark ? "border-gray-800" : "border-gray-300 bg-gray-50"} rounded-lg overflow-hidden shadow-2xl transition-all duration-200`}>
-              <MonacoEditor
-                value={code}
-                language={language}
-                theme={isDark ? "vs-dark" : "vs"}
-                onMount={handleEditorDidMount}
-                options={{ minimap: { enabled: false }, fontSize: 14 }}
-              />
-            </div>
-            {renderBottomIoPanel()}
-          </div>
+        {effectiveUserId && (user.roomId || params.roomId) && (
+          <VoiceChannelBar
+            id="colearn-voice-channel"
+            isDark={isDark}
+            myUserId={effectiveUserId}
+            myName={effectiveUserName}
+            myClientId={wsClientIdRef.current}
+            members={peerListForVoice}
+            voice={voice}
+            roomLabel="code room"
+            placement="underNav"
+          />
+        )}
 
-          <div className={`flex flex-col lg:w-1/3 flex-1 lg:flex-initial`}>
-            {renderPanelContent()}
-          </div>
-        </div>
-      </div>
-      <AccountModal
-        isOpen={isAccountOpen}
-        onClose={() => setIsAccountOpen(false)}
-      />
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
-      {collabCoachKind && collabCoachKey && typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) !== "1" && (
-        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-start justify-center pt-4 px-4">
+        {collabCoachKind && collabCoachKey && typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) !== "1" && (
           <div
-            className={`max-w-lg w-full sm:w-auto px-4 py-3 rounded-xl shadow-2xl border text-sm pointer-events-auto flex items-start gap-3 ${isDark ? "bg-amber-950/50 border-amber-800 text-amber-100" : "bg-amber-50 border-amber-200 text-amber-950"}`}
+            className={`flex-shrink-0 flex items-start gap-3 rounded-xl border px-4 py-3 ${isDark ? "bg-amber-950/50 border-amber-800 text-amber-100" : "bg-amber-50 border-amber-200 text-amber-950"}`}
             role="status"
           >
             <FiHeart className="shrink-0 mt-0.5 text-amber-500" size={20} aria-hidden />
@@ -1236,8 +1296,35 @@ const CodeEditor: React.FC = () => {
               Dismiss
             </button>
           </div>
+        )}
+
+        <div className="flex min-h-0 flex-1 gap-4 overflow-hidden flex-col lg:flex-row">
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className={`flex-1 border ${isDark ? "border-gray-800" : "border-gray-300 bg-gray-50"} rounded-lg overflow-hidden shadow-2xl transition-all duration-200`}>
+              <MonacoEditor
+                value={code}
+                language={language}
+                theme={isDark ? "vs-dark" : "vs"}
+                onMount={handleEditorDidMount}
+                options={{ minimap: { enabled: false }, fontSize: 14 }}
+              />
+            </div>
+            {renderBottomIoPanel()}
+          </div>
+
+          <div className={`flex flex-col lg:w-1/3 flex-1 lg:flex-initial`}>
+            {renderPanelContent()}
+          </div>
         </div>
-      )}
+      </div>
+      <AccountModal
+        isOpen={isAccountOpen}
+        onClose={() => setIsAccountOpen(false)}
+      />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 };

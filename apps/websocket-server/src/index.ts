@@ -27,6 +27,15 @@ interface ExtendedWebSocket extends WebSocket {
 // }
 const rooms: any = {};
 
+/** Consistent JSON shape so clients never get number/string id drift and duplicate rows. */
+function publicUserRow(u: { userId: string; name: string; clientId?: string }) {
+  return {
+    id: String(u.userId),
+    name: u.name,
+    clientId: u.clientId,
+  };
+}
+
 function generateRoomId() {
   let id;
   do {
@@ -75,9 +84,13 @@ async function process() {
     let roomId = queryParams.get("roomId"); // Get roomId from query param if provided
     const userId = queryParams.get("id"); // Get userId from query param
     const name = queryParams.get("name"); // Get name from query param
+    /** Per-tab id so the same user account can have multiple clients in one room. */
+    const clientId =
+      queryParams.get("clientId")?.trim() ||
+      `srv-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     console.log("User id", userId);
     console.log("Room id", roomId);
-    console.log("Name", name);
+    console.log("Name", name, "clientId", clientId);
 
     // If no roomId provided, generate a new roomId
     if (roomId == null || roomId == "") {
@@ -109,15 +122,18 @@ async function process() {
         })
       );
     }
-    const users = rooms[roomId].users.map((user: any) => ({
-      id: user.userId,
-      name: user.name,
-    }));
-    rooms[roomId].users.forEach((user: any) => {
-      user.ws.send(JSON.stringify({ type: "users", users }));
-    });
+    rooms[roomId].users.push({ userId, ws, name, clientId });
 
-    rooms[roomId].users.push({ userId, ws, name });
+    // Broadcast the full list (including the connection just added) to everyone in the room.
+    const allUsers = rooms[roomId].users.map((user: any) => publicUserRow(user));
+    const usersPayload = {
+      type: "users",
+      users: allUsers,
+      activeTypistId: rooms[roomId].activeTypistId ?? null,
+    };
+    rooms[roomId].users.forEach((user: any) => {
+      user.ws.send(JSON.stringify(usersPayload));
+    });
 
     // If there is no active typist yet, claim the role for the first user.
     if (!rooms[roomId].activeTypistId) {
@@ -134,20 +150,24 @@ async function process() {
     });
     console.log("all room", rooms);
 
-    pubSubClient.subscribe(roomId, (message) => {
-      // Broadcast message to all users in the room
-      const { result, sessionId } = JSON.parse(message);
-      rooms[roomId].users.forEach((user: any) => {
-        if (user.userId === userId) {
-          user.ws.send(JSON.stringify({
-            type: "output",
-            message: result,
-            sessionId
-          }));
-          console.log("Output sent to user id", user.userId, "with sessionId", sessionId);
-        }
+    try {
+      pubSubClient.subscribe(roomId, (message) => {
+        // Broadcast message to all users in the room
+        const { result, sessionId } = JSON.parse(message);
+        rooms[roomId].users.forEach((user: any) => {
+          if (user.userId === userId) {
+            user.ws.send(JSON.stringify({
+              type: "output",
+              message: result,
+              sessionId
+            }));
+            console.log("Output sent to user id", user.userId, "with sessionId", sessionId);
+          }
+        });
       });
-    });
+    } catch (err) {
+      console.log("Redis subscribe skipped for room", roomId, err);
+    }
 
     ws.on("message", (message) => {
       const data = JSON.parse(message.toString());
@@ -156,10 +176,7 @@ async function process() {
 
       // handle request from user and send it all back to all users in the room
       if (data.type === "requestToGetUsers") {
-        const users = rooms[roomId].users.map((user: any) => ({
-          id: user.userId,
-          name: user.name,
-        }));
+        const users = rooms[roomId].users.map((user: any) => publicUserRow(user));
         console.log("request recived");
 
         const payload = {
@@ -174,10 +191,8 @@ async function process() {
 
       // request for starter data on new user join
       if (data.type == "requestForAllData") {
-
-
         const otherUser = rooms[roomId].users.find(
-          (user: any) => user.userId !== userId
+          (user: any) => user.ws !== ws
         );
         if (otherUser) {
           console.log("sending request to", otherUser.name);
@@ -185,6 +200,7 @@ async function process() {
             JSON.stringify({
               type: "requestForAllData",
               userId: userId,
+              clientId: clientId,
             })
           );
         }
@@ -193,7 +209,7 @@ async function process() {
       // handle code change and send it to all users in the room
       if (data.type === "code") {
         rooms[roomId].users.forEach((user: any) => {
-          if (user.userId != userId) {
+          if (user.ws !== ws) {
             user.ws.send(JSON.stringify({ type: "code", code: data.code }));
           }
         });
@@ -201,7 +217,7 @@ async function process() {
       // handle input change and send it to all users in the room
       if (data.type === "input") {
         rooms[roomId].users.forEach((user: any) => {
-          if (user.userId != userId) {
+          if (user.ws !== ws) {
             user.ws.send(JSON.stringify({ type: "input", input: data.input }));
           }
         });
@@ -210,7 +226,7 @@ async function process() {
       // handle language change and send it to all users in the room
       if (data.type === "language") {
         rooms[roomId].users.forEach((user: any) => {
-          if (user.userId != userId) {
+          if (user.ws !== ws) {
             user.ws.send(
               JSON.stringify({ type: "language", language: data.language })
             );
@@ -221,7 +237,7 @@ async function process() {
       // handle submit button status
       if (data.type === "submitBtnStatus") {
         rooms[roomId].users.forEach((user: any) => {
-          if (user.userId != userId) {
+          if (user.ws !== ws) {
             user.ws.send(
               JSON.stringify({
                 type: "submitBtnStatus",
@@ -234,23 +250,33 @@ async function process() {
         });
       }
 
-      // handle user added
-      if (data.type === "users") {
-        rooms[roomId].users.forEach((user: any) => {
-          if (user.userId != userId) {
-            user.ws.send(JSON.stringify({ type: "users", users: data.users }));
-          }
-        });
-      }
+      // Ignore client-originated { type: "users" } — only the server may broadcast
+      // the real room list (avoids stale or crafted lists overwriting state).
 
       // send all data to new user
       if (data.type === "allData") {
-
-
         rooms[roomId].users.forEach((user: any) => {
+          const toClientId = data.toClientId;
+          if (toClientId) {
+            if (user.clientId === toClientId) {
+              console.log("sending all data to client", toClientId, "and data is", data);
+              user.ws.send(
+                JSON.stringify({
+                  type: "allData",
+                  code: data.code,
+                  input: data.input,
+                  language: data.language,
+                  currentButtonState: data.currentButtonState,
+                  isLoading: data.isLoading,
+                  ioSessions: data.ioSessions,
+                  activeIoSessionId: data.activeIoSessionId,
+                })
+              );
+            }
+            return;
+          }
           if (user.userId === data.userId) {
             console.log("sending all data to", user.name, "and data is", data);
-
             user.ws.send(
               JSON.stringify({
                 type: "allData",
@@ -259,6 +285,8 @@ async function process() {
                 language: data.language,
                 currentButtonState: data.currentButtonState,
                 isLoading: data.isLoading,
+                ioSessions: data.ioSessions,
+                activeIoSessionId: data.activeIoSessionId,
               })
             );
           }
@@ -268,12 +296,88 @@ async function process() {
       // send current cursor position to all users in the room
       if (data.type === "cursorPosition") {
         rooms[roomId].users.forEach((user: any) => {
-          if (user.userId != userId) {
+          if (user.ws !== ws) {
             user.ws.send(
               JSON.stringify({
                 type: "cursorPosition",
                 cursorPosition: data.cursorPosition,
                 userId: userId,
+              })
+            );
+          }
+        });
+      }
+
+      // Learning room / Monaco: { lineNumber, column, userName? }
+      if (data.type === "editor-cursor") {
+        rooms[roomId].users.forEach((user: any) => {
+          if (user.ws !== ws) {
+            user.ws.send(
+              JSON.stringify({
+                type: "editor-cursor",
+                userId,
+                userName: name,
+                lineNumber: data.lineNumber,
+                column: data.column,
+              })
+            );
+          }
+        });
+      }
+
+      // WebRTC voice: forward to exactly one peer (prefer toClientId)
+      if (data.type === "voice-signal" && (data.toClientId || data.toUserId)) {
+        const me = rooms[roomId].users.find((u: any) => u.ws === ws);
+        let target: { ws: WebSocket; clientId?: string } | undefined;
+        if (data.toClientId) {
+          target = rooms[roomId].users.find(
+            (u: any) => u.clientId === data.toClientId
+          );
+        } else {
+          target = rooms[roomId].users.find(
+            (u: any) => u.userId === data.toUserId
+          );
+        }
+        if (target) {
+          target.ws.send(
+            JSON.stringify({
+              type: "voice-signal",
+              fromUserId: userId,
+              fromName: name,
+              fromClientId: me?.clientId,
+              payload: data.payload,
+            })
+          );
+        }
+      }
+
+      if (data.type === "voice-state") {
+        rooms[roomId].users.forEach((user: any) => {
+          if (user.ws !== ws) {
+            user.ws.send(
+              JSON.stringify({
+                type: "voice-state",
+                userId,
+                name,
+                clientId,
+                muted: !!data.muted,
+                inVoice: data.inVoice !== false,
+              })
+            );
+          }
+        });
+      }
+
+      if (data.type === "voice-join") {
+        const me = rooms[roomId].users.find((u: any) => u.ws === ws);
+        rooms[roomId].users.forEach((user: any) => {
+          if (user.ws !== ws) {
+            user.ws.send(
+              JSON.stringify({
+                type: "voice-join",
+                userId,
+                name,
+                clientId: me?.clientId,
               })
             );
           }
@@ -306,9 +410,8 @@ async function process() {
       // everyone shares the same AI conversation.
       if (data.type === "aiMessages" && Array.isArray(data.messages)) {
         rooms[roomId].users.forEach((user: any) => {
-          // Do NOT echo back to the sender, since the sender already
-          // appends messages locally; echoing causes duplicates.
-          if (user.userId !== userId) {
+          // Do NOT echo back to the sender connection; sender already has local state.
+          if (user.ws !== ws) {
             user.ws.send(
               JSON.stringify({
                 type: "aiMessages",
@@ -366,32 +469,39 @@ async function process() {
     });
 
     ws.on("close", () => {
-      // remove user from room
       rooms[roomId].users = rooms[roomId].users.filter(
-        (user: any) => user.userId !== userId
+        (user: any) => user.ws !== ws
       );
 
-      // If the departing user was the active typist, clear control.
       if (rooms[roomId].activeTypistId === userId) {
-        rooms[roomId].activeTypistId = undefined;
+        const stillHasUser = rooms[roomId].users.some(
+          (u: any) => u.userId === userId
+        );
+        if (!stillHasUser) {
+          rooms[roomId].activeTypistId = undefined;
+        }
       }
 
-      // send updated users list to all users in the room
+      if (rooms[roomId].users.length === 0) {
+        delete rooms[roomId];
+        try {
+          pubSubClient.unsubscribe(roomId);
+        } catch (e) {
+          console.log("unsubscribe", roomId, e);
+        }
+        return;
+      }
+
+      const usersPayload = rooms[roomId].users.map((u: any) => publicUserRow(u));
       rooms[roomId].users.forEach((user: any) => {
         user.ws.send(
           JSON.stringify({
             type: "users",
-            users: rooms[roomId].users.map((u: any) => ({
-              id: u.userId,
-              name: u.name,
-            })),
+            users: usersPayload,
+            activeTypistId: rooms[roomId].activeTypistId ?? null,
           })
         );
       });
-      if (rooms[roomId].users.length === 0) {
-        delete rooms[roomId];
-        pubSubClient.unsubscribe(roomId);
-      }
 
       console.log("all room", rooms);
     });
@@ -409,11 +519,11 @@ async function process() {
 async function main() {
   try {
     await pubSubClient.connect();
-    await process();
     console.log("Redis Client Connected");
   } catch (error) {
-    console.log("Failed to connect to Redis", error);
+    console.log("Failed to connect to Redis (WebSocket will still start; code execution pub/sub may be limited)", error);
   }
+  await process();
 }
 
 main();
