@@ -4,7 +4,7 @@ import { userAtom } from '../atoms/userAtom';
 import { authAtom, AuthUser } from '../atoms/authAtom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { socketAtom } from '../atoms/socketAtom';
-import { IP_ADDRESS } from '../Globle';
+import { API_BASE_URL, WS_BASE_URL } from '../Globle';
 import AuthModal from '../components/AuthModal';
 import Sidebar from '../components/Sidebar';
 import AccountModal from '../components/AccountModal';
@@ -95,7 +95,7 @@ const Register = () => {
 
     const verifyToken = async (token: string) => {
         try {
-            const response = await fetch(`http://${IP_ADDRESS}:3000/auth/verify`, {
+            const response = await fetch(`${API_BASE_URL}/auth/verify`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -160,7 +160,7 @@ const Register = () => {
 
         try {
             if (isJoining) {
-                const joinResponse = await fetch(`http://${IP_ADDRESS}:3000/room/join`, {
+                const joinResponse = await fetch(`${API_BASE_URL}/room/join`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -189,7 +189,7 @@ const Register = () => {
         }
 
         if (!socket || socket.readyState === WebSocket.CLOSED) {
-            const ws = new WebSocket(`ws://${IP_ADDRESS}:5000?roomId=${finalRoomId}&id=${userId}&name=${userName}`);
+            const ws = new WebSocket(`${WS_BASE_URL}?roomId=${finalRoomId}&id=${userId}&name=${encodeURIComponent(userName)}`);
             setSocket(ws);
 
             ws.onopen = () => {
@@ -204,7 +204,7 @@ const Register = () => {
                     try {
                         if (!isJoining) {
                             if (learningModuleId) {
-                                const attachResponse = await fetch(`http://${IP_ADDRESS}:3000/learning/room/create`, {
+                                const attachResponse = await fetch(`${API_BASE_URL}/learning/room/create`, {
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json",
@@ -224,7 +224,7 @@ const Register = () => {
                                     return;
                                 }
                             } else {
-                                const createResponse = await fetch(`http://${IP_ADDRESS}:3000/room/create`, {
+                                const createResponse = await fetch(`${API_BASE_URL}/room/create`, {
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json",
@@ -417,7 +417,6 @@ const Register = () => {
                         }
                     }}
                     onSuccess={handleAuthSuccess}
-                    IP_ADDRESS={IP_ADDRESS}
                 />
                 <AccountModal
                     isOpen={isAccountOpen}

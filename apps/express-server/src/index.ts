@@ -39,9 +39,18 @@ function sanitizeRoomDisplayName(raw: unknown): string | undefined {
 
 const app = express();
 app.use(express.json());
-app.use(cors());
 
-const redisClient = createClient();
+const corsOrigin = process.env.CORS_ORIGIN?.trim();
+app.use(
+  cors(
+    corsOrigin && corsOrigin.length > 0
+      ? { origin: corsOrigin.split(",").map((o) => o.trim()).filter(Boolean) }
+      : {}
+  )
+);
+
+const redisUrl = process.env.REDIS_URL?.trim();
+const redisClient = redisUrl ? createClient({ url: redisUrl }) : createClient();
 
 redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
@@ -931,8 +940,10 @@ app.get("/learning-profile/:userId/summary", authenticateToken, async (req: Auth
   }
 });
 
-const server = app.listen(3000, '0.0.0.0', () => {
-  console.log("Express Server Listening on port 3000");
+const PORT = Number(process.env.PORT) || 3000;
+
+const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Express Server Listening on port ${PORT}`);
 });
 
 async function main() {
