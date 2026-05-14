@@ -1,4 +1,5 @@
 import http from "http";
+import 'dotenv/config';
 import { WebSocketServer, WebSocket } from "ws";
 import { createClient } from "redis";
 
