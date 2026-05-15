@@ -179,30 +179,20 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!roomId && auth.user && auth.token) {
       setLoadingProfile(true);
-<<<<<<< HEAD
       setLoadingUserStats(true);
       const headers = { Authorization: `Bearer ${auth.token}` };
       Promise.all([
-        fetch(`http://${IP_ADDRESS}:3000/learning-profile/${auth.user.id}`, { headers })
+        fetch(`${API_BASE_URL}/learning-profile/${auth.user.id}`, { headers })
           .then((res) => res.json())
           .then((data) => {
             setProfile(data.profile || null);
           }),
-        fetch(`http://${IP_ADDRESS}:3000/stats/${auth.user.id}`, { headers })
+        fetch(`${API_BASE_URL}/stats/${auth.user.id}`, { headers })
           .then((res) => (res.ok ? res.json() : { stats: null }))
           .then((data) => {
             setUserStats(data.stats || null);
           }),
       ])
-=======
-      fetch(`${API_BASE_URL}/learning-profile/${auth.user.id}`, {
-        headers: { Authorization: `Bearer ${auth.token}` },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setProfile(data.profile || null);
-        })
->>>>>>> deployment
         .catch((err) => {
           console.error("Error fetching profile/stats:", err);
         })

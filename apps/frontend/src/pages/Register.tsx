@@ -4,12 +4,9 @@ import { userAtom } from '../atoms/userAtom';
 import { authAtom, AuthUser } from '../atoms/authAtom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { socketAtom } from '../atoms/socketAtom';
-<<<<<<< HEAD
 import { IP_ADDRESS } from '../Globle';
 import { createWsClientId } from '../utils/wsClientId';
-=======
 import { API_BASE_URL, WS_BASE_URL } from '../Globle';
->>>>>>> deployment
 import AuthModal from '../components/AuthModal';
 import Sidebar from '../components/Sidebar';
 import AccountModal from '../components/AccountModal';
@@ -195,13 +192,9 @@ const Register = () => {
         }
 
         if (!socket || socket.readyState === WebSocket.CLOSED) {
-<<<<<<< HEAD
             const ws = new WebSocket(
-                `ws://${IP_ADDRESS}:5000?roomId=${finalRoomId}&id=${userId}&name=${userName}&clientId=${encodeURIComponent(wsClientIdRef.current)}`
+                `ws://${WS_BASE_URL}?roomId=${finalRoomId}&id=${userId}&name=${userName}&clientId=${encodeURIComponent(wsClientIdRef.current)}`
             );
-=======
-            const ws = new WebSocket(`${WS_BASE_URL}?roomId=${finalRoomId}&id=${userId}&name=${encodeURIComponent(userName)}`);
->>>>>>> deployment
             setSocket(ws);
 
             ws.onopen = () => {

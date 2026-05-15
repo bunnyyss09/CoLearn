@@ -16,12 +16,9 @@ import {
 import { socketAtom } from "../atoms/socketAtom";
 import { useNavigate, useParams } from "react-router-dom";
 import { connectedUsersAtom } from "../atoms/connectedUsersAtom";
-<<<<<<< HEAD
-import { IP_ADDRESS } from "../Globle";
+// import { IP_ADDRESS } from "../Globle";
 import { createWsClientId } from "../utils/wsClientId";
-=======
 import { API_BASE_URL, WS_BASE_URL } from "../Globle";
->>>>>>> deployment
 import { adaptStarterCommentToLanguage } from "../utils/editorLanguagePlaceholders";
 import { mergeSelfIntoMemberList, normalizeConnectedUsers, type RoomMember } from "../utils/roomMembers";
 import Chat from "../components/Chat";

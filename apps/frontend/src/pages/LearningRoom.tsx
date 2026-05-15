@@ -12,12 +12,9 @@ import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
 import SettingsModal from "../components/SettingsModal";
 import Chat from "../components/Chat";
-<<<<<<< HEAD
-import { IP_ADDRESS } from "../Globle";
+// import { IP_ADDRESS } from "../Globle";
 import { createWsClientId } from "../utils/wsClientId";
-=======
 import { API_BASE_URL, WS_BASE_URL } from "../Globle";
->>>>>>> deployment
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { normalizeForDisplay } from "../utils/outputNormalization.ts";
