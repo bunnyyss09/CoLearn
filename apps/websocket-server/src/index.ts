@@ -524,15 +524,12 @@ async function attachWebSocketHandlers() {
 async function main() {
   try {
     await pubSubClient.connect();
-<<<<<<< HEAD
-=======
     await attachWebSocketHandlers();
->>>>>>> deployment
     console.log("Redis Client Connected");
   } catch (error) {
     console.log("Failed to connect to Redis (WebSocket will still start; code execution pub/sub may be limited)", error);
   }
-  await process();
+  // await process();
 }
 
 main();
