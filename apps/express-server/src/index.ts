@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { config } from "dotenv";
 import path from "path";
 
@@ -43,9 +44,25 @@ function sanitizeRoomDisplayName(raw: unknown): string | undefined {
 
 const app = express();
 app.use(express.json());
-app.use(cors());
 
-const redisClient = createClient();
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin); // Echoes back the requester's domain
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, ngrok-skip-browser-warning");
+  res.header("Access-Control-Allow-Credentials", "true");
+  
+  // Handle the OPTIONS preflight request directly
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  
+  next();
+});
+
+app.use(express.static(path.join(__dirname, 'dist')));
+
+const redisUrl = process.env.REDIS_URL?.trim();
+const redisClient = redisUrl ? createClient({ url: redisUrl }) : createClient();
 
 redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
@@ -1047,8 +1064,14 @@ app.get("/learning-profile/:userId/summary", authenticateToken, async (req: Auth
   }
 });
 
-const server = app.listen(3000, '0.0.0.0', () => {
-  console.log("Express Server Listening on port 3000");
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+const PORT = Number(process.env.PORT) || 3000;
+
+const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Express Server Listening on port ${PORT}`);
 });
 
 async function main() {

@@ -16,8 +16,12 @@ import {
 import { socketAtom } from "../atoms/socketAtom";
 import { useNavigate, useParams } from "react-router-dom";
 import { connectedUsersAtom } from "../atoms/connectedUsersAtom";
+<<<<<<< HEAD
 import { IP_ADDRESS } from "../Globle";
 import { createWsClientId } from "../utils/wsClientId";
+=======
+import { API_BASE_URL, WS_BASE_URL } from "../Globle";
+>>>>>>> deployment
 import { adaptStarterCommentToLanguage } from "../utils/editorLanguagePlaceholders";
 import { mergeSelfIntoMemberList, normalizeConnectedUsers, type RoomMember } from "../utils/roomMembers";
 import Chat from "../components/Chat";
@@ -223,7 +227,7 @@ const CodeEditor: React.FC = () => {
     const fetchRoomData = async () => {
       try {
         // Get room info for chatId and learning metadata
-        const roomResponse = await fetch(`http://${IP_ADDRESS}:3000/room/${effectiveRoomId}`);
+        const roomResponse = await fetch(`${API_BASE_URL}/room/${effectiveRoomId}`);
         if (roomResponse.ok) {
           const roomData = await roomResponse.json();
           if (roomData.room && roomData.room.chatId) {
@@ -239,7 +243,7 @@ const CodeEditor: React.FC = () => {
 
         // Get all room data (code, language, AI messages)
         // Load from database if WebSocket hasn't synced yet (initial page load)
-        const dataResponse = await fetch(`http://${IP_ADDRESS}:3000/room/${effectiveRoomId}/data`);
+        const dataResponse = await fetch(`${API_BASE_URL}/room/${effectiveRoomId}/data`);
         if (dataResponse.ok) {
           const data = await dataResponse.json();
           
@@ -263,7 +267,7 @@ const CodeEditor: React.FC = () => {
     };
 
     fetchRoomData();
-  }, [user.roomId, params.roomId, IP_ADDRESS]);
+  }, [user.roomId, params.roomId, API_BASE_URL]);
 
   useEffect(() => {
     setCollabCoachKind(null);
@@ -275,7 +279,7 @@ const CodeEditor: React.FC = () => {
     if (!token || !uid || !codeRoomId || !collabCoachKey) return;
     if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(collabCoachKey) === "1") return;
     let cancelled = false;
-    fetch(`http://${IP_ADDRESS}:3000/learning-profile/${uid}`, {
+    fetch(`${API_BASE_URL}/learning-profile/${uid}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
@@ -324,7 +328,7 @@ const CodeEditor: React.FC = () => {
         }
 
         const ws = new WebSocket(
-          `ws://${IP_ADDRESS}:5000?roomId=${effectiveRoomId}&id=${userIdForWs}&name=${encodeURIComponent(
+          `${WS_BASE_URL}?roomId=${effectiveRoomId}&id=${userIdForWs}&name=${encodeURIComponent(
             userNameForWs
           )}&clientId=${encodeURIComponent(wsClientIdRef.current)}`
         );
@@ -566,7 +570,7 @@ const CodeEditor: React.FC = () => {
     };
 
     try {
-      const res = await fetch(`http://${IP_ADDRESS}:3000/submit`, {
+      const res = await fetch(`${API_BASE_URL}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submission),
@@ -658,7 +662,6 @@ const CodeEditor: React.FC = () => {
             chatId={chatId}
             userId={effectiveUserId || user.id}
             userName={user.name}
-            IP_ADDRESS={IP_ADDRESS}
             panelActive={activePanel === "chat"}
             onLiveChatMessage={() => setChatPanelUnread(true)}
           />
@@ -892,7 +895,7 @@ const CodeEditor: React.FC = () => {
     };
 
     try {
-      const res = await fetch(`http://${IP_ADDRESS}:3000/ai-tutor`, {
+      const res = await fetch(`${API_BASE_URL}/ai-tutor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(aiSubmission),

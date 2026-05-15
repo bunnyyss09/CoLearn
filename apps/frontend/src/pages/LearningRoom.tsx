@@ -12,8 +12,12 @@ import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
 import SettingsModal from "../components/SettingsModal";
 import Chat from "../components/Chat";
+<<<<<<< HEAD
 import { IP_ADDRESS } from "../Globle";
 import { createWsClientId } from "../utils/wsClientId";
+=======
+import { API_BASE_URL, WS_BASE_URL } from "../Globle";
+>>>>>>> deployment
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { normalizeForDisplay } from "../utils/outputNormalization.ts";
@@ -278,7 +282,7 @@ const LearningRoom: React.FC = () => {
       if (!auth.token || !roomIdFromUrl) return;
       try {
         let res = await fetch(
-          `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/state`,
+          `${API_BASE_URL}/learning/room/${roomIdFromUrl}/state`,
           {
             headers: {
               Authorization: `Bearer ${auth.token}`,
@@ -317,7 +321,7 @@ const LearningRoom: React.FC = () => {
 
         // Basic chatId fetch and shared AI messages for this room
         const roomRes = await fetch(
-          `http://${IP_ADDRESS}:3000/room/${roomIdFromUrl}`
+          `${API_BASE_URL}/room/${roomIdFromUrl}`
         );
         if (roomRes.ok) {
           const roomData = await roomRes.json();
@@ -331,7 +335,7 @@ const LearningRoom: React.FC = () => {
           }
         }
         const dataRes = await fetch(
-          `http://${IP_ADDRESS}:3000/room/${roomIdFromUrl}/data`
+          `${API_BASE_URL}/room/${roomIdFromUrl}/data`
         );
         if (dataRes.ok) {
           const roomPayload = await dataRes.json();
@@ -381,7 +385,7 @@ const LearningRoom: React.FC = () => {
       return;
     }
     let cancelled = false;
-    fetch(`http://${IP_ADDRESS}:3000/learning-profile/${user.id}`, {
+    fetch(`${API_BASE_URL}/learning-profile/${user.id}`, {
       headers: { Authorization: `Bearer ${auth.token}` },
     })
       .then((r) => r.json())
@@ -454,7 +458,7 @@ const LearningRoom: React.FC = () => {
     // create a fresh connection for this learning room.
     if ((!socket || socket.readyState === WebSocket.CLOSED) && userIdForWs) {
       const ws = new WebSocket(
-        `ws://${IP_ADDRESS}:5000?roomId=${effectiveRoomId}&id=${userIdForWs}&name=${encodeURIComponent(
+        `${WS_BASE_URL}?roomId=${effectiveRoomId}&id=${userIdForWs}&name=${encodeURIComponent(
           userNameForWs
         )}&clientId=${encodeURIComponent(wsClientIdRef.current)}`
       );
@@ -649,7 +653,7 @@ const LearningRoom: React.FC = () => {
     setTestResult(null);
     try {
       const res = await fetch(
-        `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/run-tests`,
+        `${API_BASE_URL}/learning/room/${roomIdFromUrl}/run-tests`,
         {
           method: "POST",
           headers: {
@@ -732,7 +736,7 @@ const LearningRoom: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`http://${IP_ADDRESS}:3000/ai-tutor`, {
+      const res = await fetch(`${API_BASE_URL}/ai-tutor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submission),
@@ -785,7 +789,7 @@ const LearningRoom: React.FC = () => {
     setIsAdvancing(true);
     try {
       const res = await fetch(
-        `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/next`,
+        `${API_BASE_URL}/learning/room/${roomIdFromUrl}/next`,
         {
           method: "POST",
           headers: {
@@ -843,7 +847,7 @@ const LearningRoom: React.FC = () => {
     setIsAdvancing(true);
     try {
       const res = await fetch(
-        `http://${IP_ADDRESS}:3000/learning/room/${roomIdFromUrl}/previous`,
+        `${API_BASE_URL}/learning/room/${roomIdFromUrl}/previous`,
         {
           method: "POST",
           headers: {
@@ -1039,7 +1043,7 @@ const LearningRoom: React.FC = () => {
         setRunOutput([]);
         setIsRunning(true);
         try {
-          const res = await fetch(`http://${IP_ADDRESS}:3000/submit`, {
+          const res = await fetch(`${API_BASE_URL}/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code, language, roomId: roomIdFromUrl, input: runInput, sessionId: runSessionIdRef.current }),
@@ -1057,7 +1061,7 @@ const LearningRoom: React.FC = () => {
         setTestCaseOutputs((prev) => ({ ...prev, [testIndex]: [] }));
         setIsRunning(true);
         try {
-          const res = await fetch(`http://${IP_ADDRESS}:3000/submit`, {
+          const res = await fetch(`${API_BASE_URL}/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code, language, roomId: roomIdFromUrl, input: testCase.input || "", sessionId: `test-${testIndex}-${runSessionIdRef.current}` }),
@@ -1349,7 +1353,6 @@ const LearningRoom: React.FC = () => {
             chatId={chatId}
             userId={effectiveUserId || user.id}
             userName={user.name}
-            IP_ADDRESS={IP_ADDRESS}
             panelActive={activePanel === "chat"}
             onLiveChatMessage={() => setChatPanelUnread(true)}
           />

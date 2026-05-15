@@ -9,7 +9,7 @@ import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
 import SettingsModal from "../components/SettingsModal";
-import { IP_ADDRESS } from "../Globle";
+import { API_BASE_URL } from "../Globle";
 import { FiChevronsLeft, FiChevronsRight, FiBook, FiChevronDown, FiChevronRight } from "react-icons/fi";
 import { motion } from "framer-motion";
 import FadeIn from "../components/animations/FadeIn";
@@ -120,7 +120,7 @@ const ChooseModule: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`http://${IP_ADDRESS}:3000/learning/modules`, {
+        const res = await fetch(`${API_BASE_URL}/learning/modules`, {
           headers: { Authorization: `Bearer ${auth.token}` },
         });
         if (!res.ok) {
@@ -145,7 +145,7 @@ const ChooseModule: React.FC = () => {
     setError(null);
     try {
       const res = await fetch(
-        `http://${IP_ADDRESS}:3000/learning/room/create`,
+        `${API_BASE_URL}/learning/room/create`,
         {
           method: "POST",
           headers: {

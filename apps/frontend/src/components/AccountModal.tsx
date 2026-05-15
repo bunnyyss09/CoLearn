@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useRecoilValue } from "recoil";
 import { authAtom } from "../atoms/authAtom";
 import { themeAtom } from "../atoms/themeAtom";
-import { IP_ADDRESS } from "../Globle";
+import { API_BASE_URL } from "../Globle";
 import { AiOutlineLoading3Quarters, AiOutlineClose } from "react-icons/ai";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -50,7 +50,7 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (isOpen && activeTab === "insights" && user && auth.token && !profile) {
       setLoadingProfile(true);
-      fetch(`http://${IP_ADDRESS}:3000/learning-profile/${user.id}`, {
+      fetch(`${API_BASE_URL}/learning-profile/${user.id}`, {
         headers: { Authorization: `Bearer ${auth.token}` },
       })
         .then((res) => res.json())

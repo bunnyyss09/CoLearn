@@ -1,10 +1,15 @@
 import http from "http";
+import 'dotenv/config';
 import { WebSocketServer, WebSocket } from "ws";
 import { createClient } from "redis";
 
+const redisUrl = process.env.REDIS_URL?.trim();
+const pubSubClient = redisUrl ? createClient({ url: redisUrl }) : createClient();
+
+const PORT = Number(process.env.PORT) || 5000;
+
 const server = http.createServer();
 const wss = new WebSocketServer({ server });
-const pubSubClient = createClient();
 
 // Heartbeat interval (30 seconds)
 const HEARTBEAT_INTERVAL = 30000;
@@ -47,7 +52,7 @@ function generateRoomId() {
   return id;
 }
 
-async function process() {
+async function attachWebSocketHandlers() {
   pubSubClient.on("error", (err) =>
     console.log("Redis PubSub Client Error", err)
   );
@@ -512,13 +517,17 @@ async function process() {
     console.log(`Server listening on port ${addr.port}`);
   });
 
-  server.listen(5000, '0.0.0.0', () => {
-    console.log("web socket server started on 5000");
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`WebSocket server started on ${PORT}`);
   });
 }
 async function main() {
   try {
     await pubSubClient.connect();
+<<<<<<< HEAD
+=======
+    await attachWebSocketHandlers();
+>>>>>>> deployment
     console.log("Redis Client Connected");
   } catch (error) {
     console.log("Failed to connect to Redis (WebSocket will still start; code execution pub/sub may be limited)", error);

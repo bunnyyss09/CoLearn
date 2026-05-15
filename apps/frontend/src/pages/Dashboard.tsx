@@ -16,7 +16,7 @@ import { motion } from "framer-motion";
 import { authAtom } from "../atoms/authAtom";
 import { themeAtom } from "../atoms/themeAtom";
 import { sidebarOpenAtom } from "../atoms/sidebarAtom";
-import { IP_ADDRESS } from "../Globle";
+import { API_BASE_URL } from "../Globle";
 import Sidebar from "../components/Sidebar";
 import AccountModal from "../components/AccountModal";
 import SettingsModal from "../components/SettingsModal";
@@ -179,6 +179,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!roomId && auth.user && auth.token) {
       setLoadingProfile(true);
+<<<<<<< HEAD
       setLoadingUserStats(true);
       const headers = { Authorization: `Bearer ${auth.token}` };
       Promise.all([
@@ -193,6 +194,15 @@ const Dashboard: React.FC = () => {
             setUserStats(data.stats || null);
           }),
       ])
+=======
+      fetch(`${API_BASE_URL}/learning-profile/${auth.user.id}`, {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          setProfile(data.profile || null);
+        })
+>>>>>>> deployment
         .catch((err) => {
           console.error("Error fetching profile/stats:", err);
         })
@@ -210,7 +220,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (roomId && auth.token) {
       setLoadingRoom(true);
-      fetch(`http://${IP_ADDRESS}:3000/room/${roomId}/details`, {
+      fetch(`${API_BASE_URL}/room/${roomId}/details`, {
         headers: { Authorization: `Bearer ${auth.token}` },
       })
         .then((res) => res.json())
@@ -233,7 +243,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (roomId && auth.token) {
       setLoadingRoomStats(true);
-      fetch(`http://${IP_ADDRESS}:3000/room/${roomId}/stats`, {
+      fetch(`${API_BASE_URL}/room/${roomId}/stats`, {
         headers: { Authorization: `Bearer ${auth.token}` },
       })
         .then((res) => res.json())
@@ -265,7 +275,7 @@ const Dashboard: React.FC = () => {
       return;
     }
     setLoadingTeaching(true);
-    fetch(`http://${IP_ADDRESS}:3000/room/${roomId}/teaching-insights`, {
+    fetch(`${API_BASE_URL}/room/${roomId}/teaching-insights`, {
       headers: { Authorization: `Bearer ${auth.token}` },
     })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))

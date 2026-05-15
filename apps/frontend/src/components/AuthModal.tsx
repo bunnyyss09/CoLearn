@@ -3,15 +3,15 @@ import { AiOutlineClose, AiOutlineMail, AiOutlineLock, AiOutlineUser } from "rea
 import { useRecoilValue } from "recoil";
 import { themeAtom } from "../atoms/themeAtom";
 import { motion, AnimatePresence } from "framer-motion";
+import { API_BASE_URL } from "../Globle";
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (token: string, user: { id: string; name: string; email: string }) => void;
-  IP_ADDRESS: string;
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, IP_ADDRESS }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -39,7 +39,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, IP_AD
         ? { name, email, password }
         : { email, password };
 
-      const response = await fetch(`http://${IP_ADDRESS}:3000${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

@@ -4,7 +4,7 @@ import { authAtom } from "../atoms/authAtom";
 import { userAtom } from "../atoms/userAtom";
 import { sidebarOpenAtom } from "../atoms/sidebarAtom";
 import { themeAtom } from "../atoms/themeAtom";
-import { IP_ADDRESS } from "../Globle";
+import { API_BASE_URL } from "../Globle";
 import { useNavigate } from "react-router-dom";
 import { AiOutlineDelete, AiOutlineEdit } from "react-icons/ai";
 import { FiMenu, FiX, FiSettings, FiUser, FiPlus } from "react-icons/fi";
@@ -60,7 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     const fetchRooms = async () => {
       if (!auth.token || !showRooms) return;
       try {
-        const res = await fetch(`http://${IP_ADDRESS}:3000/rooms/my`, {
+        const res = await fetch(`${API_BASE_URL}/rooms/my`, {
           headers: { Authorization: `Bearer ${auth.token}` },
         });
         if (!res.ok) return;
@@ -114,7 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       return;
     }
     try {
-      const res = await fetch(`http://${IP_ADDRESS}:3000/room/${roomId}`, {
+      const res = await fetch(`${API_BASE_URL}/room/${roomId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -148,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     setDeleteConfirmRoomId(null);
 
     try {
-      const res = await fetch(`http://${IP_ADDRESS}:3000/room/${roomId}`, {
+      const res = await fetch(`${API_BASE_URL}/room/${roomId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${auth.token}` },
       });

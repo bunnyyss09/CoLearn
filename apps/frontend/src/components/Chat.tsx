@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { AiOutlineSend } from "react-icons/ai";
 import { useRecoilValue } from "recoil";
 import { themeAtom } from "../atoms/themeAtom";
+import { API_BASE_URL } from "../Globle";
 
 interface ChatMessage {
   userId: string;
@@ -15,7 +16,6 @@ interface ChatProps {
   chatId: string;
   userId: string;
   userName: string;
-  IP_ADDRESS: string;
   /** When false, incoming WS chat messages trigger onLiveChatMessage (for nav badge). */
   panelActive?: boolean;
   onLiveChatMessage?: () => void;
@@ -26,7 +26,6 @@ const Chat: React.FC<ChatProps> = ({
   chatId,
   userId,
   userName: _userName,
-  IP_ADDRESS,
   panelActive = true,
   onLiveChatMessage,
 }) => {
@@ -44,7 +43,7 @@ const Chat: React.FC<ChatProps> = ({
   const fetchChatHistory = useCallback(async () => {
     if (!chatId) return;
     try {
-      const response = await fetch(`http://${IP_ADDRESS}:3000/chat/${chatId}?limit=50`);
+      const response = await fetch(`${API_BASE_URL}/chat/${chatId}?limit=50`);
       if (response.ok) {
         const data = await response.json();
         setMessages(data.messages || []);
@@ -52,7 +51,7 @@ const Chat: React.FC<ChatProps> = ({
     } catch (error) {
       console.error("Error loading chat history:", error);
     }
-  }, [chatId, IP_ADDRESS]);
+  }, [chatId]);
 
   // Load / refresh history when the room or server changes
   useEffect(() => {
@@ -94,7 +93,7 @@ const Chat: React.FC<ChatProps> = ({
             // Only save to backend if this is the sender's message
             // This prevents duplicate saves when multiple clients receive the broadcast
             if (data.chatMessage.userId === userId) {
-              fetch(`http://${IP_ADDRESS}:3000/chat/send`, {
+              fetch(`${API_BASE_URL}/chat/send`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -119,7 +118,7 @@ const Chat: React.FC<ChatProps> = ({
         socket.removeEventListener("message", handleMessage);
       };
     }
-  }, [socket, chatId, IP_ADDRESS, userId]);
+  }, [socket, chatId, userId]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
