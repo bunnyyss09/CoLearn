@@ -41,14 +41,21 @@ function sanitizeRoomDisplayName(raw: unknown): string | undefined {
 const app = express();
 app.use(express.json());
 
-const corsOrigin = process.env.CORS_ORIGIN?.trim();
-app.use(
-  cors(
-    corsOrigin && corsOrigin.length > 0
-      ? { origin: corsOrigin.split(",").map((o) => o.trim()).filter(Boolean) }
-      : {}
-  )
-);
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin); // Echoes back the requester's domain
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, ngrok-skip-browser-warning");
+  res.header("Access-Control-Allow-Credentials", "true");
+  
+  // Handle the OPTIONS preflight request directly
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  
+  next();
+});
+
+app.use(express.static(path.join(__dirname, 'dist')));
 
 const redisUrl = process.env.REDIS_URL?.trim();
 const redisClient = redisUrl ? createClient({ url: redisUrl }) : createClient();
@@ -939,6 +946,10 @@ app.get("/learning-profile/:userId/summary", authenticateToken, async (req: Auth
     console.error("Error fetching learning summary:", error);
     res.status(500).json({ error: "Failed to fetch learning summary" });
   }
+});
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 const PORT = Number(process.env.PORT) || 3000;

@@ -25,7 +25,7 @@ if (cluster.isPrimary) {
   });
 } else {
   const redisUrl = process.env.REDIS_URL?.trim();
-  console.log('Current ENV:', process.env.REDIS_URL);
+  // console.log('Current ENV:', process.env.REDIS_URL);
   const redisOpts = redisUrl ? { url: redisUrl } : undefined;
   const client = redisOpts ? createClient(redisOpts) : createClient();
   const pubClient = redisOpts ? createClient(redisOpts) : createClient();
