@@ -4,7 +4,7 @@ import { userAtom } from '../atoms/userAtom';
 import { authAtom, AuthUser } from '../atoms/authAtom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { socketAtom } from '../atoms/socketAtom';
-import { IP_ADDRESS } from '../Globle';
+// import { IP_ADDRESS } from '../Globle';
 import { createWsClientId } from '../utils/wsClientId';
 import { API_BASE_URL, WS_BASE_URL } from '../Globle';
 import AuthModal from '../components/AuthModal';
@@ -193,7 +193,7 @@ const Register = () => {
 
         if (!socket || socket.readyState === WebSocket.CLOSED) {
             const ws = new WebSocket(
-                `ws://${WS_BASE_URL}?roomId=${finalRoomId}&id=${userId}&name=${userName}&clientId=${encodeURIComponent(wsClientIdRef.current)}`
+                `${WS_BASE_URL}?roomId=${finalRoomId}&id=${userId}&name=${userName}&clientId=${encodeURIComponent(wsClientIdRef.current)}`
             );
             setSocket(ws);
 
