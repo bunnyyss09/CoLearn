@@ -78,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     localStorage.removeItem("user");
     setAuth({ isAuthenticated: false, user: null, token: null });
     setUser({ id: "", name: "", roomId: "" });
-    navigate("/");
+    navigate("/start");
   };
 
   const handleRoomClick = (roomId: string, e?: React.MouseEvent) => {
@@ -170,8 +170,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const panelClass = isDark
-    ? "bg-surface-800 border border-surface-700"
-    : "bg-white border border-surface-200";
+    ? "glass-panel rounded-2xl"
+    : "glass-panel-light rounded-2xl";
 
   return (
     <>
@@ -294,7 +294,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Toggle button (mobile) */}
       <button
-        className={`fixed top-4 left-4 z-40 ${isDark ? "bg-surface-800 text-white border-surface-700" : "bg-white text-gray-900 border-surface-200"} p-2.5 rounded-xl border shadow-lg lg:hidden transition-colors hover:bg-brand-600 hover:text-white hover:border-brand-600`}
+        className={`fixed top-4 left-4 z-40 p-2.5 rounded-xl border shadow-lg lg:hidden transition-all duration-300 ${isDark ? "glass-panel text-white hover:shadow-glow-neon" : "glass-panel-light text-gray-900 hover:shadow-glow-brand"}`}
         onClick={() => setIsOpen((v) => !v)}
         aria-label={isOpen ? "Close menu" : "Open menu"}
       >
@@ -303,14 +303,20 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 ${isDark ? "bg-surface-900 border-surface-700" : "bg-white/95 backdrop-blur-md border-surface-200 shadow-xl"} border-r p-4 flex flex-col transform transition-all duration-300 ease-out
+        className={`fixed inset-y-0 left-0 z-30 w-64 border-r p-4 flex flex-col transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+  ${isDark
+            ? "bg-surface-900/80 backdrop-blur-2xl border-[rgba(0,240,255,0.08)]"
+            : "bg-white/80 backdrop-blur-2xl border-surface-200/60 shadow-xl"
+          }
   ${isOpen
             ? "translate-x-0 lg:translate-x-0 lg:static"
             : "-translate-x-full lg:hidden"
           }`}
       >
+        {/* Sidebar glow accent */}
+        <div className="absolute top-0 right-0 w-px h-full bg-gradient-to-b from-[rgba(0,240,255,0.2)] via-[rgba(191,90,242,0.1)] to-transparent pointer-events-none" />
         {/* Account header with gradient accent */}
-        <div className={`flex items-center justify-between mb-5 pb-4 border-b ${isDark ? "border-surface-700" : "border-surface-200"}`}>
+        <div className={`flex items-center justify-between mb-5 pb-4 border-b ${isDark ? "border-[rgba(0,240,255,0.08)]" : "border-surface-200/60"}`}>
           <div>
             <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-500"}`}>Account</p>
             <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -320,7 +326,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {auth.isAuthenticated && (
             <button
               onClick={handleLogout}
-              className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 transition-colors"
+              className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 transition-all duration-300 hover:shadow-[0_0_12px_rgba(239,68,68,0.2)]"
             >
               Logout
             </button>
@@ -345,7 +351,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <motion.div
                           layout
                           key={room.roomId}
-                          className={`relative group w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${isDark ? "bg-surface-800 border-surface-700 text-gray-200 hover:bg-surface-700 hover:border-brand-500/30" : "bg-surface-50 border-surface-200 text-gray-800 hover:bg-brand-50 hover:border-brand-200 shadow-sm"} border`}
+                          className={`relative group w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all duration-300 border ${isDark ? "bg-surface-800/50 border-[rgba(0,240,255,0.06)] text-gray-200 hover:bg-surface-700/60 hover:border-[rgba(0,240,255,0.15)] hover:shadow-[0_0_15px_rgba(0,240,255,0.05)]" : "bg-white/60 border-surface-200/60 text-gray-800 hover:bg-brand-50/60 hover:border-brand-200 shadow-sm"}`}
                         >
                           {isEditing ? (
                             <div className="pr-14">
@@ -418,10 +424,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </p>
                   )}
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => navigate("/")}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 bg-gradient-to-r from-brand-600 to-accent-500 hover:from-brand-500 hover:to-accent-400 text-white shadow-lg hover:shadow-glow-brand flex items-center justify-center gap-2"
+                    whileHover={{ scale: 1.02, y: -1 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => navigate("/start")}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 bg-gradient-to-r from-[rgba(0,240,255,0.15)] to-[rgba(191,90,242,0.15)] hover:from-[rgba(0,240,255,0.25)] hover:to-[rgba(191,90,242,0.25)] text-white border border-[rgba(0,240,255,0.2)] hover:border-[rgba(0,240,255,0.4)] shadow-lg hover:shadow-glow-neon flex items-center justify-center gap-2 backdrop-blur-sm"
                   >
                     <FiPlus size={16} />
                     Create / Join Room
@@ -436,19 +442,19 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        <div className={`mt-auto pt-4 ${isDark ? "border-surface-700" : "border-surface-200"} border-t flex flex-col gap-2`}>
+        <div className={`mt-auto pt-4 ${isDark ? "border-[rgba(0,240,255,0.08)]" : "border-surface-200/60"} border-t flex flex-col gap-2`}>
           <button
-            className={`w-full px-3 py-2.5 rounded-xl transition-all duration-200 border ${isDark ? "bg-surface-800 hover:bg-surface-700 text-gray-300 border-surface-700" : "bg-surface-50 hover:bg-brand-50 text-gray-700 border-surface-200"} text-sm text-left flex items-center gap-3 hover:border-brand-500/30`}
+            className={`w-full px-3 py-2.5 rounded-xl transition-all duration-300 border ${isDark ? "bg-surface-800/40 hover:bg-surface-700/50 text-gray-300 border-[rgba(0,240,255,0.06)] hover:border-[rgba(0,240,255,0.15)] hover:shadow-[0_0_10px_rgba(0,240,255,0.05)]" : "bg-white/40 hover:bg-brand-50/60 text-gray-700 border-surface-200/60"} text-sm text-left flex items-center gap-3`}
             onClick={onOpenSettings}
           >
-            <FiSettings size={16} className="text-brand-400" />
+            <FiSettings size={16} className="text-[#00f0ff]" />
             Settings
           </button>
           <button
-            className={`w-full px-3 py-2.5 rounded-xl transition-all duration-200 border ${isDark ? "bg-surface-800 hover:bg-surface-700 text-gray-300 border-surface-700" : "bg-surface-50 hover:bg-brand-50 text-gray-700 border-surface-200"} text-sm text-left flex items-center gap-3 hover:border-brand-500/30`}
+            className={`w-full px-3 py-2.5 rounded-xl transition-all duration-300 border ${isDark ? "bg-surface-800/40 hover:bg-surface-700/50 text-gray-300 border-[rgba(0,240,255,0.06)] hover:border-[rgba(191,90,242,0.15)] hover:shadow-[0_0_10px_rgba(191,90,242,0.05)]" : "bg-white/40 hover:bg-brand-50/60 text-gray-700 border-surface-200/60"} text-sm text-left flex items-center gap-3`}
             onClick={onOpenAccount}
           >
-            <FiUser size={16} className="text-brand-400" />
+            <FiUser size={16} className="text-[#bf5af2]" />
             Account
           </button>
         </div>

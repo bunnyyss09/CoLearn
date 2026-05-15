@@ -16,13 +16,12 @@ import {
 import { socketAtom } from "../atoms/socketAtom";
 import { useNavigate, useParams } from "react-router-dom";
 import { connectedUsersAtom } from "../atoms/connectedUsersAtom";
-// import { IP_ADDRESS } from "../Globle";
 import { createWsClientId } from "../utils/wsClientId";
 import { API_BASE_URL, WS_BASE_URL } from "../Globle";
 import { adaptStarterCommentToLanguage } from "../utils/editorLanguagePlaceholders";
 import { mergeSelfIntoMemberList, normalizeConnectedUsers, type RoomMember } from "../utils/roomMembers";
 import Chat from "../components/Chat";
-import VoiceChannelBar from "../components/VoiceChannelBar";
+import VoiceChannelBar, { VOICE_OPEN_JOIN_EVENT } from "../components/VoiceChannelBar";
 import Sidebar from "../components/Sidebar";
 import { useVoiceSession } from "../hooks/useVoiceSession";
 import AccountModal from "../components/AccountModal";
@@ -591,8 +590,8 @@ const CodeEditor: React.FC = () => {
   };
 
   const renderIoPanelRight = () => (
-    <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200"} border-2 rounded-lg shadow-2xl flex flex-col h-full transition-all duration-200`}>
-      <h2 className={`text-xl font-bold p-3 border-b ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
+    <div className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg flex flex-col h-full transition-all duration-300`}>
+      <h2 className={`text-lg font-bold font-display p-3 border-b ${isDark ? "text-gray-200 border-[rgba(0,240,255,0.08)]" : "text-gray-900 border-surface-200/60 bg-white/30"}`}>
         Test Cases (Input / Output)
       </h2>
       <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
@@ -639,7 +638,7 @@ const CodeEditor: React.FC = () => {
     </div>
   );
 
-  const roomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full min-h-0 transition-all duration-200`;
+  const roomChatShellClass = `${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg flex flex-col h-full min-h-0 transition-all duration-300`;
 
   /** Keeps Chat mounted while viewing AI / Room so messages and WS listener are not torn down. */
   const renderPersistentChatPanel = () => {
@@ -681,16 +680,16 @@ const CodeEditor: React.FC = () => {
       return (
         <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0">
           {renderPersistentChatPanel()}
-        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiBox /> AI Assistant
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg transition-all duration-300`}>
+          <h2 className={`text-lg font-bold font-display p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-200 border-[rgba(0,240,255,0.08)]" : "text-gray-900 border-surface-200/60 bg-white/30"}`}>
+            <FiBox className="text-[#00f0ff]" /> AI Assistant
           </h2>
           <div className="flex-grow p-4 overflow-y-auto space-y-4">
             {aiMessages.length > 0 ? (
               aiMessages.map((msg, index) => (
                 <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-                  {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>}
-                  <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-blue-500 text-white rounded-tr-sm border border-blue-600') : (isDark ? 'bg-gray-800' : 'bg-white border border-gray-300')} ${msg.sender === 'user' ? (isDark ? 'text-white' : 'text-white') : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
+                  {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00f0ff] to-[#bf5af2] flex-shrink-0 flex items-center justify-center font-bold text-white text-sm">AI</div>}
+                  <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-gradient-to-r from-[rgba(0,240,255,0.12)] to-[rgba(191,90,242,0.12)] text-white rounded-tr-sm border border-[rgba(0,240,255,0.15)]' : 'bg-brand-500 text-white rounded-tr-sm') : (isDark ? 'bg-surface-800/60 border border-[rgba(255,255,255,0.06)] backdrop-blur-sm' : 'bg-white/80 border border-gray-200 backdrop-blur-sm')} ${msg.sender === 'user' ? 'text-white' : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
                     {msg.sender === 'ai' ? (
                       <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
                         <ReactMarkdown
@@ -744,16 +743,16 @@ const CodeEditor: React.FC = () => {
             )}
             <div ref={aiChatEndRef} />
           </div>
-          <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+          <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-[rgba(0,240,255,0.08)]" : "border-surface-200/60 bg-white/20"}`}>
             <input
               type="text"
               value={aiInput}
               onChange={(e) => setAiInput(e.target.value)}
               placeholder="Chat with the AI..."
-              className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+              className={`${isDark ? "bg-surface-900/50 border-[rgba(0,240,255,0.1)] text-white placeholder-gray-500 focus:ring-[rgba(0,240,255,0.3)] focus:border-[rgba(0,240,255,0.3)]" : "bg-white/80 border-gray-200 text-gray-900 placeholder-gray-500 hover:border-brand-400 focus:ring-brand-500 focus:border-brand-500"} border w-full p-2.5 rounded-xl focus:outline-none focus:ring-2 text-sm transition-all duration-300 backdrop-blur-sm`}
               disabled={isAiLoading}
             />
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95" disabled={isAiLoading || !aiInput.trim()}>
+            <button type="submit" className="bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] hover:border-[rgba(0,240,255,0.5)] text-white p-2.5 rounded-xl disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-glow-neon transform hover:scale-105 active:scale-95 backdrop-blur-sm" disabled={isAiLoading || !aiInput.trim()}>
               <AiOutlineSend size={20} />
             </button>
           </form>
@@ -786,9 +785,9 @@ const CodeEditor: React.FC = () => {
       return (
         <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0">
           {renderPersistentChatPanel()}
-        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-          <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-            <FiUsers /> Room
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg transition-all duration-300`}>
+          <h2 className={`text-lg font-bold font-display p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-200 border-[rgba(0,240,255,0.08)]" : "text-gray-900 border-surface-200/60 bg-white/30"}`}>
+            <FiUsers className="text-[#bf5af2]" /> Room
           </h2>
           <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
             <div>
@@ -805,8 +804,8 @@ const CodeEditor: React.FC = () => {
                       : !!(voice.remoteInVoice[peerK] || voice.remoteInVoice[u.id]);
                     const speaking = !!(voice.speaking[peerK] || voice.speaking[u.id]);
                     return (
-                    <div key={`${u.id}-${u.clientId || "tab"}`} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
-                      <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                    <div key={`${u.id}-${u.clientId || "tab"}`} className={`flex items-center gap-3 rounded-xl p-3 border transition-all duration-300 ${isDark ? "bg-surface-800/40 border-[rgba(0,240,255,0.06)] hover:border-[rgba(0,240,255,0.15)]" : "bg-white/60 border-gray-200 shadow-sm"}`}>
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00f0ff] to-[#bf5af2] text-white flex items-center justify-center text-lg font-bold">
                         {u.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1009,11 +1008,11 @@ const CodeEditor: React.FC = () => {
 
     return (
       <div
-        className={`mt-3 ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200"} border-2 rounded-lg shadow-2xl flex flex-col transition-all duration-200`}
+        className={`mt-3 ${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg flex flex-col transition-all duration-300`}
         style={{ height: isIoCollapsed ? 40 : ioPanelHeight }}
       >
         <div
-          className={`flex items-center justify-between px-4 py-2 border-b cursor-row-resize select-none ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-100/50"}`}
+          className={`flex items-center justify-between px-4 py-2 border-b cursor-row-resize select-none ${isDark ? "border-[rgba(0,240,255,0.08)]" : "border-surface-200/60 bg-white/30"}`}
           onMouseDown={startIoResizeDrag}
         >
           <div className="flex items-center gap-2">
@@ -1077,24 +1076,24 @@ const CodeEditor: React.FC = () => {
   };
 
   return (
-    <div className={`h-screen font-sans transition-colors duration-200 ${isDark ? "bg-black text-gray-300" : "bg-gradient-to-br from-gray-50 to-blue-50 text-gray-900"} flex h-screen overflow-hidden`}>
+    <div className={`h-screen font-sans transition-colors duration-300 ${isDark ? "app-shell-dark text-gray-300" : "app-shell-light text-gray-900"} flex h-screen overflow-hidden`}>
       <Sidebar
         showRooms
         onOpenAccount={() => setIsAccountOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
       <div className={`flex flex-col h-full flex-1 w-full gap-4 p-4 overflow-hidden`}> 
-        <nav className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50/80 backdrop-blur-sm border-blue-200 shadow-lg"} border rounded-xl px-4 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between transition-all duration-200`}>
+        <nav className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-xl px-4 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between transition-all duration-300`}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsSidebarOpen((v) => !v)}
-              className={`hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md border ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700" : "bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300"}`}
+              className={`hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md border transition-all duration-300 ${isDark ? "bg-surface-800/50 hover:bg-surface-700/60 text-gray-200 border-[rgba(0,240,255,0.08)] hover:border-[rgba(0,240,255,0.2)]" : "bg-white/60 hover:bg-gray-100 text-gray-800 border-gray-200"}`}
             >
               {isSidebarOpen ? <FiChevronsLeft size={18} /> : <FiChevronsRight size={18} />}
             </button>
-            <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>CoLearn Live</span>
+            <span className={`text-2xl font-bold font-display ${isDark ? "text-white" : "text-gray-900"}`}><span className="gradient-text-neon">CoLearn</span> Live</span>
             <span
-              className={`text-xs px-2 py-1 rounded-full max-w-[14rem] truncate ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}
+              className={`text-xs font-mono px-2 py-1 rounded-full max-w-[14rem] truncate ${isDark ? "text-gray-400 bg-surface-800/50 border border-[rgba(0,240,255,0.08)]" : "text-brand-700 bg-brand-50/80 border border-brand-200"}`}
               title={user.roomId || params.roomId || undefined}
             >
               {roomDisplayName || `Room ${user.roomId || params.roomId || "..."}`}
@@ -1105,7 +1104,7 @@ const CodeEditor: React.FC = () => {
               type="button"
               onClick={() => handlePanelToggle("ai")}
               title={aiPanelUnread ? "New AI messages" : undefined}
-              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-300 ${activePanel === 'ai' ? 'bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon' : (isDark ? 'bg-surface-800/50 text-gray-300 hover:bg-surface-700/60 border border-[rgba(0,240,255,0.06)]' : 'bg-white/60 text-gray-700 hover:bg-gray-50 border border-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiBox /> AI Tutor
               {aiPanelUnread && (
@@ -1119,7 +1118,7 @@ const CodeEditor: React.FC = () => {
               type="button"
               onClick={() => handlePanelToggle("chat")}
               title={chatPanelUnread ? "New chat messages" : undefined}
-              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-300 ${activePanel === 'chat' ? 'bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon' : (isDark ? 'bg-surface-800/50 text-gray-300 hover:bg-surface-700/60 border border-[rgba(0,240,255,0.06)]' : 'bg-white/60 text-gray-700 hover:bg-gray-50 border border-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiMessageCircle /> Chat
               {chatPanelUnread && (
@@ -1131,7 +1130,7 @@ const CodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => handlePanelToggle("info")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'info' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-300 ${activePanel === 'info' ? 'bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon' : (isDark ? 'bg-surface-800/50 text-gray-300 hover:bg-surface-700/60 border border-[rgba(0,240,255,0.06)]' : 'bg-white/60 text-gray-700 hover:bg-gray-50 border border-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiUsers /> Room
             </button>
@@ -1141,6 +1140,7 @@ const CodeEditor: React.FC = () => {
                 onClick={(e) => {
                   e.preventDefault();
                   document.getElementById("colearn-voice-channel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                  window.dispatchEvent(new CustomEvent(VOICE_OPEN_JOIN_EVENT));
                 }}
                 className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 border transition-all duration-200 ${
                   voice.inVoice
@@ -1163,7 +1163,7 @@ const CodeEditor: React.FC = () => {
                 if (!effectiveRoomId) return;
                 navigate(`/learn/${effectiveRoomId}/choose`);
               }}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${isDark ? 'bg-blue-700 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700'} hover:scale-105 active:scale-95`}
+              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-300 ${isDark ? 'bg-gradient-to-r from-[rgba(191,90,242,0.15)] to-[rgba(0,240,255,0.15)] border border-[rgba(191,90,242,0.2)] text-white hover:shadow-glow-purple' : 'bg-brand-600 text-white hover:bg-brand-700'} hover:scale-105 active:scale-95`}
             >
               <FiBox /> Modules
             </button>
@@ -1238,7 +1238,7 @@ const CodeEditor: React.FC = () => {
             </div>
             <button
               onClick={handleSubmit}
-              className={`bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md shadow-lg transition-all flex items-center justify-center gap-2 ${isLoading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105 active:scale-95'} duration-200`}
+              className={`bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] hover:border-[rgba(0,240,255,0.5)] text-white px-5 py-2 rounded-md shadow-lg transition-all flex items-center justify-center gap-2 backdrop-blur-sm ${isLoading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105 hover:shadow-glow-neon active:scale-95'} duration-300`}
               disabled={isLoading}
             >
               {isLoading && <AiOutlineLoading3Quarters className="animate-spin" />}

@@ -303,11 +303,12 @@ const Dashboard: React.FC = () => {
       <div className="space-y-6">
         {/* Welcome Header */}
         <FadeIn>
-        <div className={`p-6 rounded-2xl ${isDark ? "bg-gradient-to-r from-brand-900/50 to-brand-800/50 border-surface-700" : "bg-gradient-to-r from-brand-100 to-brand-50 border-brand-200"} border`}>
+        <div className={`p-6 rounded-2xl relative overflow-hidden ${isDark ? "glass-panel" : "glass-panel-light"}`}>
+          <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg, #00f0ff, #bf5af2, #ff2d55, #30d158, #00f0ff)', backgroundSize: '200% 100%', animation: 'text-shimmer 3s ease-in-out infinite' }} />
           <h1 className={`text-2xl font-bold font-display ${isDark ? "text-white" : "text-gray-900"}`}>
             Welcome back, {auth.user?.name || "Learner"}!
           </h1>
-          <p className={`mt-2 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+          <p className={`mt-2 ${isDark ? "text-gray-300/80" : "text-gray-600"}`}>
             Ready to continue your coding journey? Select a room from the sidebar or check your progress below.
           </p>
         </div>
@@ -316,10 +317,10 @@ const Dashboard: React.FC = () => {
         {/* Stats Overview */}
         <StaggerContainer className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StaggerItem>
-          <div className={`p-4 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-4 rounded-2xl stat-card ${isDark ? "glass-panel" : "glass-panel-light"}`}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${isDark ? "bg-brand-900/50" : "bg-brand-100"}`}>
-                <FiMessageCircle className="text-brand-400" size={20} />
+              <div className="p-2 rounded-lg bg-[rgba(0,240,255,0.08)] border border-[rgba(0,240,255,0.12)]">
+                <FiMessageCircle className="text-[#00f0ff]" size={20} />
               </div>
               <div>
                 <p className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -332,13 +333,13 @@ const Dashboard: React.FC = () => {
           </StaggerItem>
 
           <StaggerItem>
-          <div className={`p-4 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-4 rounded-2xl stat-card ${isDark ? "glass-panel" : "glass-panel-light"}`}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${passRate !== null && passRate >= 70 ? "bg-green-900/50" : "bg-yellow-900/50"}`}>
-                <FiCode className={passRate !== null && passRate >= 70 ? "text-green-500" : "text-yellow-500"} size={20} />
+              <div className={`p-2 rounded-lg ${passRate !== null && passRate >= 70 ? "bg-[rgba(48,209,88,0.08)] border border-[rgba(48,209,88,0.12)]" : "bg-[rgba(255,159,10,0.08)] border border-[rgba(255,159,10,0.12)]"}`}>
+                <FiCode className={passRate !== null && passRate >= 70 ? "text-[#30d158]" : "text-[#ff9f0a]"} size={20} />
               </div>
               <div>
-                <p className={`text-2xl font-bold ${passRate !== null && passRate >= 70 ? "text-green-500" : passRate !== null ? "text-yellow-500" : isDark ? "text-white" : "text-gray-900"}`}>
+                <p className={`text-2xl font-bold ${passRate !== null && passRate >= 70 ? "text-[#30d158]" : passRate !== null ? "text-[#ff9f0a]" : isDark ? "text-white" : "text-gray-900"}`}>
                   {passRate !== null ? `${passRate}%` : "-"}
                 </p>
                 <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-600"}`}>Test Pass Rate</p>
@@ -348,10 +349,10 @@ const Dashboard: React.FC = () => {
           </StaggerItem>
 
           <StaggerItem>
-          <div className={`p-4 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-4 rounded-2xl stat-card ${isDark ? "glass-panel" : "glass-panel-light"}`}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${isDark ? "bg-green-900/50" : "bg-green-100"}`}>
-                <FiBook className="text-green-500" size={20} />
+              <div className="p-2 rounded-lg bg-[rgba(48,209,88,0.08)] border border-[rgba(48,209,88,0.12)]">
+                <FiBook className="text-[#30d158]" size={20} />
               </div>
               <div>
                 <p className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -364,15 +365,15 @@ const Dashboard: React.FC = () => {
           </StaggerItem>
 
           <StaggerItem>
-          <div className={`p-4 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-4 rounded-2xl stat-card ${isDark ? "glass-panel" : "glass-panel-light"}`}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${isDark ? "bg-brand-800/50" : "bg-brand-100"}`}>
-                <FiPlay className="text-brand-400" size={20} />
+              <div className="p-2 rounded-lg bg-[rgba(191,90,242,0.08)] border border-[rgba(191,90,242,0.12)]">
+                <FiPlay className="text-[#bf5af2]" size={20} />
               </div>
               <div>
                 <p className={`text-2xl font-bold capitalize ${
-                  profile?.learningPace === "fast" ? "text-green-500" :
-                  profile?.learningPace === "slow" ? "text-yellow-500" :
+                  profile?.learningPace === "fast" ? "text-[#30d158]" :
+                  profile?.learningPace === "slow" ? "text-[#ff9f0a]" :
                   isDark ? "text-white" : "text-gray-900"
                 }`}>
                   {profile?.learningPace === "unknown" ? "-" : profile?.learningPace || "-"}
@@ -492,7 +493,7 @@ const Dashboard: React.FC = () => {
         {/* Areas to Improve & Topics */}
         <div className="grid md:grid-cols-2 gap-4">
           {/* Areas to Focus On */}
-          <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-5 rounded-2xl ${isDark ? "glass-panel" : "glass-panel-light"}`}>
             <h3 className={`font-semibold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
               Areas to Focus On
             </h3>
@@ -518,14 +519,14 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Frequently Asked Topics */}
-          <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+          <div className={`p-5 rounded-2xl ${isDark ? "glass-panel" : "glass-panel-light"}`}>
             <h3 className={`font-semibold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
               Topics You're Exploring
             </h3>
             {profile?.metrics.topTopics && profile.metrics.topTopics.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {profile.metrics.topTopics.map((t, i) => (
-                  <span key={i} className={`px-3 py-1.5 rounded-full text-sm ${isDark ? "bg-brand-800/50 text-brand-300" : "bg-brand-100 text-brand-700"}`}>
+                  <span key={i} className={`px-3 py-1.5 rounded-full text-sm ${isDark ? "bg-[rgba(191,90,242,0.08)] border border-[rgba(191,90,242,0.15)] text-[#bf5af2]" : "bg-brand-100 text-brand-700"}`}>
                     {t.topic} ({t.count})
                   </span>
                 ))}
@@ -539,16 +540,16 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className={`p-5 rounded-2xl ${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-gray-200 shadow-sm"} border`}>
+        <div className={`p-5 rounded-2xl ${isDark ? "glass-panel" : "glass-panel-light"}`}>
           <h3 className={`font-semibold mb-3 ${isDark ? "text-white" : "text-gray-900"}`}>
             Quick Actions
           </h3>
           <div className="flex flex-wrap gap-3">
             <motion.button
-              whileHover={{ scale: 1.03 }}
+              whileHover={{ scale: 1.03, y: -2 }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => navigate("/")}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white shadow-lg hover:shadow-glow-brand font-medium transition-all"
+              onClick={() => navigate("/start")}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-[rgba(0,240,255,0.15)] to-[rgba(191,90,242,0.15)] border border-[rgba(0,240,255,0.2)] hover:border-[rgba(0,240,255,0.4)] text-white shadow-lg hover:shadow-glow-neon font-medium transition-all duration-300 backdrop-blur-sm"
             >
               + Create / Join Room
             </motion.button>
@@ -556,11 +557,11 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Tip */}
-        <div className={`p-4 rounded-lg ${isDark ? "bg-surface-800/50 border-surface-700" : "bg-brand-50 border-brand-200"} border text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-          💡 <strong>Tip:</strong> Select a room from the sidebar to start coding, or create a new room to begin a fresh session!
+        <div className={`p-4 rounded-lg border text-sm ${isDark ? "glass-panel text-gray-400" : "glass-panel-light text-gray-600"}`}>
+          <strong>Tip:</strong> Select a room from the sidebar to start coding, or create a new room to begin a fresh session!
         </div>
 
-        <div className={`p-4 rounded-lg ${isDark ? "bg-brand-950/40 border-brand-900/50" : "bg-brand-50 border-brand-200"} border text-sm ${isDark ? "text-brand-200/90" : "text-brand-900/90"}`}>
+        <div className={`p-4 rounded-lg border text-sm ${isDark ? "glass-panel text-[#00f0ff]/80" : "glass-panel-light text-brand-900/90"}`}>
           <strong className="font-semibold">For instructors:</strong> After students join a <strong>learning room</strong>, open that room from the sidebar and use <strong>Class insights</strong> on the dashboard for participation signals and supportive check-in ideas — not grades.
         </div>
       </div>
@@ -594,7 +595,8 @@ const Dashboard: React.FC = () => {
       <div className="space-y-6">
         {/* Room Header */}
         <FadeIn>
-        <div className={`p-6 rounded-2xl ${isDark ? "bg-gradient-to-r from-brand-900/50 to-brand-700/50 border-surface-700" : "bg-gradient-to-r from-brand-100 to-brand-50 border-brand-200"} border`}>
+        <div className={`p-6 rounded-2xl relative overflow-hidden ${isDark ? "glass-panel" : "glass-panel-light"}`}>
+          <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg, #00f0ff, #bf5af2, #ff2d55, #30d158, #00f0ff)', backgroundSize: '200% 100%', animation: 'text-shimmer 3s ease-in-out infinite' }} />
           <div className="flex items-start justify-between">
             <div>
               <h1 className={`text-2xl font-bold font-display ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -934,10 +936,10 @@ const Dashboard: React.FC = () => {
 
         {/* Enter Room Button */}
         <motion.button
-          whileHover={{ scale: 1.03 }}
+          whileHover={{ scale: 1.02, y: -2 }}
           whileTap={{ scale: 0.97 }}
           onClick={handleEnterRoom}
-          className="w-full py-4 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white font-semibold text-lg transition-all duration-200 shadow-lg hover:shadow-glow-brand"
+          className="w-full py-4 rounded-2xl bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] hover:border-[rgba(0,240,255,0.5)] text-white font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-glow-neon backdrop-blur-sm"
         >
           {roomDetails.isLearningRoom ? "Continue Learning" : "Enter Room"}
         </motion.button>
@@ -946,7 +948,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className={`flex h-screen ${isDark ? "bg-surface-900" : "bg-surface-50"}`}>
+    <div className={`flex h-screen ${isDark ? "app-shell-dark" : "app-shell-light"}`}>
       <Sidebar
         showRooms={true}
         onOpenAccount={() => setIsAccountOpen(true)}

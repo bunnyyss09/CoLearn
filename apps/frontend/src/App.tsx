@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import Register from "./pages/Register";
+import LandingPage from "./pages/LandingPage";
 import CodeEditor from "./pages/CodeEditor";
 import LearningRoom from "./pages/LearningRoom";
 import ChooseModule from "./pages/ChooseModule";
@@ -81,10 +82,18 @@ const App = () => {
             }
           />
           <Route
-            path="/"
+            path="/start"
             element={
               <PageTransition>
                 <Register />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/"
+            element={
+              <PageTransition>
+                <LandingPage />
               </PageTransition>
             }
           />

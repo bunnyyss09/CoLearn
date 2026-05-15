@@ -39,7 +39,7 @@ import {
 import { AiOutlineSend, AiOutlineLoading3Quarters, AiOutlineCopy, AiOutlineCheck } from "react-icons/ai";
 import NotesPanel from "../components/NotesPanel";
 import { useVoiceSession } from "../hooks/useVoiceSession";
-import VoiceChannelBar from "../components/VoiceChannelBar";
+import VoiceChannelBar, { VOICE_OPEN_JOIN_EVENT } from "../components/VoiceChannelBar";
 
 // Debounce delay for code sync (ms)
 const CODE_SYNC_DEBOUNCE_MS = 150;
@@ -879,7 +879,7 @@ const LearningRoom: React.FC = () => {
         : 0;
     
     return (
-      <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-lg"} border-2 rounded-lg flex flex-col h-full transition-all duration-200`}>
+      <div className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg flex flex-col h-full transition-all duration-300`}>
         <button
           onClick={() => setIsCheckpointsCollapsed(!isCheckpointsCollapsed)}
           className={`w-full p-3 flex items-center justify-between border-b ${isDark ? "border-gray-800 hover:bg-gray-800/50" : "border-blue-200 hover:bg-blue-100/50 bg-blue-100/30"} transition-colors`}
@@ -961,7 +961,7 @@ const LearningRoom: React.FC = () => {
   const renderCenterPanel = () => {
     if (!module) {
       return (
-        <div className={`flex-1 flex items-center justify-center rounded-lg border ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"}`}>
+        <div className={`flex-1 flex items-center justify-center rounded-lg border ${isDark ? "bg-surface-900/40 border-[rgba(0,240,255,0.08)] backdrop-blur-sm" : "bg-white/60 border-gray-200"}`}>
           <p className={isDark ? "text-gray-400" : "text-gray-600"}>Loading module...</p>
         </div>
       );
@@ -1019,7 +1019,7 @@ const LearningRoom: React.FC = () => {
 
     if (!currentCheckpoint) {
       return (
-        <div className={`flex-1 flex items-center justify-center rounded-lg border ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"}`}>
+        <div className={`flex-1 flex items-center justify-center rounded-lg border ${isDark ? "bg-surface-900/40 border-[rgba(0,240,255,0.08)] backdrop-blur-sm" : "bg-white/60 border-gray-200"}`}>
           <p className={isDark ? "text-gray-400" : "text-gray-600"}>Loading checkpoint...</p>
         </div>
       );
@@ -1075,7 +1075,7 @@ const LearningRoom: React.FC = () => {
     return (
       <div className="flex flex-col h-full gap-3">
         {/* Checkpoint Description Card */}
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-lg"} border-2 rounded-lg p-4 flex-shrink-0 transition-all duration-200`}>
+        <div className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg p-4 flex-shrink-0 transition-all duration-300`}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <h2 className={`text-lg font-bold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -1130,7 +1130,7 @@ const LearningRoom: React.FC = () => {
         </div>
 
         {/* I/O Panel - Collapsible like CodeEditor */}
-        <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-lg"} border-2 rounded-lg overflow-hidden flex-shrink-0 transition-all duration-200`}>
+        <div className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg overflow-hidden flex-shrink-0 transition-all duration-300`}>
           <button
             onClick={() => setIsIoCollapsed(!isIoCollapsed)}
             className={`w-full px-3 py-2 flex items-center justify-between ${isDark ? "hover:bg-gray-800/50" : "hover:bg-blue-100/50 bg-blue-100/30"} transition-colors`}
@@ -1303,7 +1303,7 @@ const LearningRoom: React.FC = () => {
 
         {/* Explanation/Reflection sections for special checkpoints */}
         {isExplainCheckpoint && (
-          <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-yellow-50 border-yellow-200"} border-2 rounded-lg p-3 flex-shrink-0`}>
+          <div className={`${isDark ? "glass-panel" : "bg-yellow-50/80 border border-yellow-200/60 backdrop-blur-sm"} rounded-lg p-3 flex-shrink-0`}>
             <p className={`text-sm font-semibold mb-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>📝 Explain your understanding</p>
             <textarea
               value={explanation}
@@ -1316,7 +1316,7 @@ const LearningRoom: React.FC = () => {
         )}
 
         {isReflectionCheckpoint && (
-          <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-purple-50 border-purple-200"} border-2 rounded-lg p-3 flex-shrink-0`}>
+          <div className={`${isDark ? "glass-panel" : "bg-purple-50/80 border border-purple-200/60 backdrop-blur-sm"} rounded-lg p-3 flex-shrink-0`}>
             <p className={`text-sm font-semibold mb-2 ${isDark ? "text-gray-200" : "text-gray-800"}`}>💭 Reflect on what you learned</p>
             <textarea
               value={reflection}
@@ -1331,7 +1331,7 @@ const LearningRoom: React.FC = () => {
     );
   };
 
-  const learningRoomChatShellClass = `${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg flex flex-col h-full min-h-0 transition-all duration-200`;
+  const learningRoomChatShellClass = `${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg flex flex-col h-full min-h-0 transition-all duration-300`;
 
   const renderPersistentLearningChat = () => {
     if (!chatReady || !chatId || !socket) return null;
@@ -1364,7 +1364,7 @@ const LearningRoom: React.FC = () => {
         <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0">
           {renderPersistentLearningChat()}
           <div
-            className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200 p-3`}
+            className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg transition-all duration-300 p-3`}
           >
             <NotesPanel
               roomId={roomIdFromUrl}
@@ -1401,7 +1401,7 @@ const LearningRoom: React.FC = () => {
       return (
         <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0">
           {renderPersistentLearningChat()}
-        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg transition-all duration-300`}>
           <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
             <FiUsers /> Room
           </h2>
@@ -1421,7 +1421,7 @@ const LearningRoom: React.FC = () => {
                     const speaking = !!(voice.speaking[peerK] || voice.speaking[u.id]);
                     return (
                     <div key={`${u.id}-${u.clientId || "tab"}`} className={`flex items-center gap-3 rounded-lg p-3 border ${isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300 shadow-sm"}`}>
-                      <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00f0ff] to-[#bf5af2] text-white flex items-center justify-center text-lg font-bold">
                         {u.name?.charAt(0).toUpperCase() || "?"}
                       </div>
                       <div>
@@ -1492,9 +1492,9 @@ const LearningRoom: React.FC = () => {
     return (
       <div className="flex flex-col flex-1 min-h-0 h-full w-full min-w-0">
         {renderPersistentLearningChat()}
-      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200 shadow-xl"} border-2 rounded-lg transition-all duration-200`}>
-        <h2 className={`text-xl font-bold p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>
-          <FiBox /> AI Guide
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg transition-all duration-300`}>
+        <h2 className={`text-lg font-bold font-display p-3 border-b flex items-center gap-2 ${isDark ? "text-gray-200 border-[rgba(0,240,255,0.08)]" : "text-gray-900 border-surface-200/60 bg-white/30"}`}>
+          <FiBox className="text-[#00f0ff]" /> AI Guide
         </h2>
         <div className="flex-grow p-4 overflow-y-auto space-y-4">
           {aiMessages.length === 0 && (
@@ -1504,8 +1504,8 @@ const LearningRoom: React.FC = () => {
           )}
           {aiMessages.map((msg, idx) => (
             <div key={idx} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-              {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center font-bold text-white">A</div>}
-              <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-blue-500 text-white rounded-tr-sm border border-blue-600') : (isDark ? 'bg-gray-800' : 'bg-white border border-gray-300')} ${msg.sender === 'user' ? 'text-white' : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
+              {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00f0ff] to-[#bf5af2] flex-shrink-0 flex items-center justify-center font-bold text-white text-sm">AI</div>}
+              <div className={`max-w-xs md:max-w-md lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm transition-all ${msg.sender === 'user' ? (isDark ? 'bg-gradient-to-r from-[rgba(0,240,255,0.12)] to-[rgba(191,90,242,0.12)] text-white rounded-tr-sm border border-[rgba(0,240,255,0.15)]' : 'bg-brand-500 text-white rounded-tr-sm') : (isDark ? 'bg-surface-800/60 border border-[rgba(255,255,255,0.06)] backdrop-blur-sm' : 'bg-white/80 border border-gray-200 backdrop-blur-sm')} ${msg.sender === 'user' ? 'text-white' : (isDark ? 'text-gray-300' : 'text-gray-800')}`}>
                 {msg.sender === 'ai' ? (
                   <div className={`text-sm prose ${isDark ? "prose-invert" : ""} prose-sm max-w-none`}>
                     <ReactMarkdown
@@ -1546,7 +1546,7 @@ const LearningRoom: React.FC = () => {
           )}
           <div ref={aiChatEndRef} />
         </div>
-        <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+        <form onSubmit={handleAiSubmit} className={`p-3 border-t flex gap-2 ${isDark ? "border-[rgba(0,240,255,0.08)]" : "border-surface-200/60 bg-white/20"}`}>
           <input
             type="text"
             value={aiInput}
@@ -1567,7 +1567,7 @@ const LearningRoom: React.FC = () => {
   return (
     <div
       className={`h-screen font-sans flex overflow-hidden ${
-        isDark ? "bg-black text-gray-200" : "bg-gradient-to-br from-gray-50 to-blue-50"
+        isDark ? "app-shell-dark text-gray-200" : "app-shell-light"
       }`}
     >
       {/* Toast overlay */}
@@ -1598,24 +1598,24 @@ const LearningRoom: React.FC = () => {
       />
       <div className="flex flex-col flex-1 w-full gap-4 p-4 overflow-hidden">
         {/* Navigation Bar - matching CodeEditor style */}
-        <nav className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50/80 backdrop-blur-sm border-blue-200 shadow-lg"} border rounded-xl px-4 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between transition-all duration-200`}>
+        <nav className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-xl px-4 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between transition-all duration-300`}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsSidebarOpen((v) => !v)}
-              className={`hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md border ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700" : "bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300"}`}
+              className={`hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md border transition-all duration-300 ${isDark ? "bg-surface-800/50 hover:bg-surface-700/60 text-gray-200 border-[rgba(0,240,255,0.08)] hover:border-[rgba(0,240,255,0.2)]" : "bg-white/60 hover:bg-gray-100 text-gray-800 border-gray-200"}`}
             >
               {isSidebarOpen ? <FiChevronsLeft size={18} /> : <FiChevronsRight size={18} />}
             </button>
             <button
               onClick={() => roomIdFromUrl && navigate(`/code/${roomIdFromUrl}`)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all hover:scale-105 active:scale-95 ${isDark ? "bg-gray-800 hover:bg-gray-700 border-gray-700 text-gray-200" : "bg-white hover:bg-gray-50 border-gray-300 text-gray-800 shadow-sm"}`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all duration-300 hover:scale-105 active:scale-95 ${isDark ? "bg-surface-800/50 hover:bg-surface-700/60 border-[rgba(0,240,255,0.08)] hover:border-[rgba(0,240,255,0.2)] text-gray-200" : "bg-white/60 hover:bg-gray-50 border-gray-200 text-gray-800 shadow-sm"}`}
             >
               <span>←</span>
               <span>Back to Editor</span>
             </button>
             <div>
-              <span className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>CoLearn</span>
-              <span className={`text-xs px-2 py-1 rounded-full ml-2 ${isDark ? "text-gray-500 bg-gray-800" : "text-blue-700 bg-blue-100 border border-blue-200"}`}>
+              <span className={`text-2xl font-bold font-display ${isDark ? "text-white" : "text-gray-900"}`}><span className="gradient-text-neon">CoLearn</span></span>
+              <span className={`text-xs font-mono px-2 py-1 rounded-full ml-2 ${isDark ? "text-gray-400 bg-surface-800/50 border border-[rgba(0,240,255,0.08)]" : "text-brand-700 bg-brand-50/80 border border-brand-200"}`}>
                 Module · {roomDisplayName ? `${roomDisplayName} · ${roomLabel}` : roomLabel}
               </span>
             </div>
@@ -1625,7 +1625,7 @@ const LearningRoom: React.FC = () => {
               type="button"
               onClick={() => setActivePanel("ai")}
               title={aiPanelUnread ? "New AI messages" : undefined}
-              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'ai' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300')} hover:scale-105 active:scale-95`}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-300 ${activePanel === 'ai' ? 'bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon' : (isDark ? 'bg-surface-800/50 text-gray-300 hover:bg-surface-700/60 border border-[rgba(0,240,255,0.06)]' : 'bg-white/60 text-gray-700 hover:bg-gray-50 border border-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiBox /> AI Guide
               {aiPanelUnread && (
@@ -1639,7 +1639,7 @@ const LearningRoom: React.FC = () => {
               type="button"
               onClick={() => setActivePanel("chat")}
               title={chatPanelUnread ? "New chat messages" : undefined}
-              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'chat' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              className={`relative px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-300 ${activePanel === 'chat' ? 'bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon' : (isDark ? 'bg-surface-800/50 text-gray-300 hover:bg-surface-700/60 border border-[rgba(0,240,255,0.06)]' : 'bg-white/60 text-gray-700 hover:bg-gray-50 border border-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiMessageCircle /> Chat
               {chatPanelUnread && (
@@ -1651,7 +1651,7 @@ const LearningRoom: React.FC = () => {
             </button>
             <button
               onClick={() => setActivePanel("info")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'info' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-300 ${activePanel === 'info' ? 'bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon' : (isDark ? 'bg-surface-800/50 text-gray-300 hover:bg-surface-700/60 border border-[rgba(0,240,255,0.06)]' : 'bg-white/60 text-gray-700 hover:bg-gray-50 border border-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiUsers /> Room
             </button>
@@ -1661,6 +1661,7 @@ const LearningRoom: React.FC = () => {
                 onClick={(e) => {
                   e.preventDefault();
                   document.getElementById("colearn-voice-channel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                  window.dispatchEvent(new CustomEvent(VOICE_OPEN_JOIN_EVENT));
                 }}
                 className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 border transition-all duration-200 ${
                   voice.inVoice
@@ -1680,7 +1681,7 @@ const LearningRoom: React.FC = () => {
             <button
               type="button"
               onClick={() => setActivePanel("notes")}
-              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-200 ${activePanel === 'notes' ? 'bg-blue-600 text-white shadow-md' : (isDark ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')} hover:scale-105 active:scale-95`}
+              className={`px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all duration-300 ${activePanel === 'notes' ? 'bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon' : (isDark ? 'bg-surface-800/50 text-gray-300 hover:bg-surface-700/60 border border-[rgba(0,240,255,0.06)]' : 'bg-white/60 text-gray-700 hover:bg-gray-50 border border-gray-200')} hover:scale-105 active:scale-95`}
             >
               <FiFileText /> Notes
             </button>

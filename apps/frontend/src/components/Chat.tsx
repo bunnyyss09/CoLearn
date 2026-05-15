@@ -144,8 +144,8 @@ const Chat: React.FC<ChatProps> = ({
   };
 
   return (
-    <div className={`${isDark ? "bg-gray-900 border-gray-800" : "bg-blue-50 border-blue-200"} border-2 rounded-lg shadow-2xl flex flex-col h-full min-h-0 overflow-hidden`}>
-      <h2 className={`text-xl font-bold p-4 border-b ${isDark ? "text-gray-300 border-gray-800" : "text-gray-900 border-blue-200 bg-blue-100/50"}`}>Chat</h2>
+    <div className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-lg flex flex-col h-full min-h-0 overflow-hidden`}>
+      <h2 className={`text-lg font-bold font-display p-4 border-b ${isDark ? "text-gray-200 border-[rgba(0,240,255,0.08)]" : "text-gray-900 border-surface-200/60 bg-white/30"}`}>Chat</h2>
       <div className="flex-1 min-h-0 p-4 overflow-y-auto overscroll-contain space-y-3 scroll-smooth">
         {messages.length > 0 ? (
           messages.map((msg, index) => {
@@ -162,7 +162,7 @@ const Chat: React.FC<ChatProps> = ({
               >
                 <div
                   className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-md ${
-                    isMine ? "bg-blue-500" : "bg-green-500"
+                    isMine ? "bg-gradient-to-br from-[#00f0ff] to-[#bf5af2]" : "bg-gradient-to-br from-[#30d158] to-[#00f0ff]"
                   }`}
                 >
                   {msg.userName.charAt(0).toUpperCase()}
@@ -181,10 +181,10 @@ const Chat: React.FC<ChatProps> = ({
                   <div
                     className={`rounded-2xl px-4 py-2.5 shadow-sm transition-all border ${
                       isMine
-                        ? "bg-blue-600 text-white rounded-tr-sm border-blue-700"
+                        ? "bg-gradient-to-r from-[rgba(0,240,255,0.12)] to-[rgba(191,90,242,0.12)] text-white rounded-tr-sm border-[rgba(0,240,255,0.15)]"
                         : isDark
-                          ? "bg-gray-800 text-gray-300 rounded-tl-sm border-gray-700"
-                          : "bg-white text-gray-800 rounded-tl-sm border-gray-300"
+                          ? "bg-surface-800/60 text-gray-300 rounded-tl-sm border-[rgba(255,255,255,0.06)] backdrop-blur-sm"
+                          : "bg-white/80 text-gray-800 rounded-tl-sm border-gray-200 backdrop-blur-sm"
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
@@ -214,18 +214,18 @@ const Chat: React.FC<ChatProps> = ({
         )}
         <div ref={chatEndRef} />
       </div>
-      <form onSubmit={handleSendMessage} className={`p-3 border-t flex gap-2 ${isDark ? "border-gray-800" : "border-blue-200 bg-blue-50/30"}`}>
+      <form onSubmit={handleSendMessage} className={`p-3 border-t flex gap-2 ${isDark ? "border-[rgba(0,240,255,0.08)]" : "border-surface-200/60 bg-white/20"}`}>
         <input
           type="text"
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
           placeholder="Type a message..."
-          className={`${isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500 hover:border-blue-400"} border w-full p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition`}
+          className={`${isDark ? "bg-surface-900/50 border-[rgba(0,240,255,0.1)] text-white placeholder-gray-500 focus:ring-[rgba(0,240,255,0.3)] focus:border-[rgba(0,240,255,0.3)]" : "bg-white/80 border-gray-200 text-gray-900 placeholder-gray-500 hover:border-brand-400 focus:ring-brand-500 focus:border-brand-500"} border w-full p-2.5 rounded-xl focus:outline-none focus:ring-2 text-sm transition-all duration-300 backdrop-blur-sm`}
           disabled={!socket || socket.readyState !== WebSocket.OPEN}
         />
         <button
           type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+          className="bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] hover:border-[rgba(0,240,255,0.5)] text-white p-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-glow-neon transform hover:scale-105 active:scale-95 backdrop-blur-sm"
           disabled={
             !inputMessage.trim() ||
             !socket ||

@@ -203,15 +203,15 @@ const ChooseModule: React.FC = () => {
     }
 
     // Fallback: if for some reason we don't have a roomId, go home.
-    navigate("/");
+    navigate("/start");
   };
 
   return (
     <div
       className={`min-h-screen font-sans flex ${
         isDark
-          ? "bg-black text-gray-200"
-          : "bg-gradient-to-br from-surface-50 to-brand-50"
+          ? "app-shell-dark text-gray-200"
+          : "app-shell-light"
       }`}
     >
       <Sidebar
@@ -221,19 +221,19 @@ const ChooseModule: React.FC = () => {
       />
       <div className="flex flex-col flex-1 p-4 gap-4 overflow-auto">
         <nav
-          className={`border rounded-2xl px-4 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 ${
+          className={`rounded-2xl px-4 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 ${
             isDark
-              ? "bg-surface-900 border-surface-700"
-              : "bg-brand-50/80 border-blue-200"
+              ? "glass-panel"
+              : "glass-panel-light"
           }`}
         >
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen((v) => !v)}
-              className={`hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md border ${
+              className={`hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md border transition-all duration-300 ${
                 isDark
-                  ? "bg-surface-800 hover:bg-surface-700 text-gray-200 border-surface-700"
-                  : "bg-surface-50 hover:bg-gray-200 text-gray-800 border-gray-300"
+                  ? "bg-surface-800/50 hover:bg-surface-700/60 text-gray-200 border-[rgba(0,240,255,0.08)] hover:border-[rgba(0,240,255,0.2)]"
+                  : "bg-white/60 hover:bg-gray-100 text-gray-800 border-gray-200"
               }`}
             >
               {sidebarOpen ? (
@@ -244,10 +244,10 @@ const ChooseModule: React.FC = () => {
             </button>
             <button
               onClick={handleBackToEditor}
-              className={`p-2 rounded-lg border ${
+              className={`p-2 rounded-lg border transition-all duration-300 ${
                 isDark
-                  ? "bg-surface-800 hover:bg-surface-700 border-surface-700"
-                  : "bg-white hover:bg-surface-50 border-gray-300"
+                  ? "bg-surface-800/50 hover:bg-surface-700/60 border-[rgba(0,240,255,0.08)] hover:border-[rgba(0,240,255,0.2)]"
+                  : "bg-white/60 hover:bg-gray-100 border-gray-200"
               }`}
               title="Back to editor"
             >
@@ -259,10 +259,10 @@ const ChooseModule: React.FC = () => {
                   isDark ? "text-white" : "text-gray-900"
                 }`}
               >
-                CoLearn · Learn
+                <span className="gradient-text-neon">CoLearn</span> · Learn
               </div>
               <p
-                className={`text-xs ${
+                className={`text-xs font-mono ${
                   isDark ? "text-gray-400" : "text-gray-600"
                 }`}
               >
@@ -273,8 +273,8 @@ const ChooseModule: React.FC = () => {
         </nav>
 
         <div
-          className={`flex-1 rounded-2xl border p-6 ${
-            isDark ? "bg-surface-900 border-surface-700" : "bg-white border-gray-200"
+          className={`flex-1 rounded-2xl p-6 ${
+            isDark ? "glass-panel" : "glass-panel-light"
           }`}
         >
           <FadeIn>
@@ -368,10 +368,10 @@ const ChooseModule: React.FC = () => {
                         {langModules.map((mod) => (
                           <StaggerItem key={mod.moduleId}>
                             <AnimatedCard
-                              className={`rounded-2xl border p-4 flex flex-col transition-all hover:scale-[1.02] ${
+                              className={`rounded-2xl p-4 flex flex-col transition-all duration-300 ${
                                 isDark
-                                  ? "bg-surface-800 border-surface-700 hover:border-gray-500"
-                                  : "bg-surface-50 border-gray-200 hover:border-brand-300 hover:shadow-md"
+                                  ? "glass-panel hover:border-[rgba(0,240,255,0.2)] hover:shadow-[0_0_20px_rgba(0,240,255,0.05)]"
+                                  : "glass-panel-light hover:border-brand-300 hover:shadow-md"
                               }`}
                             >
                               <div className="flex items-start gap-3 mb-2">
@@ -426,15 +426,15 @@ const ChooseModule: React.FC = () => {
                               )}
 
                               <motion.button
-                                whileHover={{ scale: 1.03 }}
+                                whileHover={{ scale: 1.03, y: -1 }}
                                 whileTap={{ scale: 0.97 }}
                                 onClick={() => handleStartModule(mod.moduleId)}
                                 disabled={startingId !== null}
-                                className={`mt-auto w-full py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
+                                className={`mt-auto w-full py-2 px-4 rounded-lg font-medium text-sm transition-all duration-300 ${
                                   startingId === mod.moduleId
                                     ? "opacity-70 cursor-wait"
                                     : ""
-                                } bg-gradient-to-r from-brand-600 to-accent-500 hover:from-brand-500 hover:to-accent-400 text-white shadow-lg hover:shadow-glow-brand`}
+                                } bg-gradient-to-r from-[rgba(0,240,255,0.15)] to-[rgba(191,90,242,0.15)] border border-[rgba(0,240,255,0.2)] hover:border-[rgba(0,240,255,0.4)] text-white shadow-lg hover:shadow-glow-neon backdrop-blur-sm`}
                               >
                                 {startingId === mod.moduleId ? "Starting…" : "Start"}
                               </motion.button>

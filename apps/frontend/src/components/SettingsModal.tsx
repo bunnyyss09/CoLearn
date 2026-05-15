@@ -38,18 +38,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          transition={{ duration: 0.25 }}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-2xl flex items-center justify-center p-4"
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className={`${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-surface-200"} border rounded-2xl shadow-2xl w-full max-w-sm relative overflow-hidden`}
+            initial={{ opacity: 0, scale: 0.92, y: 24, filter: 'blur(12px)' }}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 0.95, y: 12, filter: 'blur(8px)' }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-2xl w-full max-w-sm relative overflow-hidden`}
           >
-            {/* Gradient top accent */}
-            <div className="h-1 bg-gradient-brand" />
+            {/* Holographic top accent */}
+            <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #00f0ff, #bf5af2, #ff2d55, #30d158, #00f0ff)', backgroundSize: '200% 100%', animation: 'text-shimmer 3s ease-in-out infinite' }} />
 
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
@@ -66,25 +66,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                   <p className={`text-sm font-semibold mb-3 ${isDark ? "text-gray-200" : "text-gray-700"}`}>Theme</p>
                   <div className="flex gap-3">
                     <motion.button
-                      whileHover={{ scale: 1.05 }}
+                      whileHover={{ scale: 1.05, y: -1 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => changeTheme("dark")}
-                      className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${
                         theme === "dark"
-                          ? "bg-brand-600 text-white shadow-lg shadow-brand-600/30"
-                          : isDark ? "bg-surface-700 text-gray-300 hover:bg-surface-700/80" : "bg-surface-100 text-gray-700 hover:bg-surface-200"
+                          ? "bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon"
+                          : isDark ? "bg-surface-700/50 text-gray-300 hover:bg-surface-700/80 border border-surface-700" : "bg-surface-100 text-gray-700 hover:bg-surface-200 border border-surface-200"
                       }`}
                     >
                       Dark
                     </motion.button>
                     <motion.button
-                      whileHover={{ scale: 1.05 }}
+                      whileHover={{ scale: 1.05, y: -1 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => changeTheme("light")}
-                      className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${
                         theme === "light"
-                          ? "bg-brand-600 text-white shadow-lg shadow-brand-600/30"
-                          : isDark ? "bg-surface-700 text-gray-300 hover:bg-surface-700/80" : "bg-surface-100 text-gray-700 hover:bg-surface-200"
+                          ? "bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] text-white shadow-glow-neon"
+                          : isDark ? "bg-surface-700/50 text-gray-300 hover:bg-surface-700/80 border border-surface-700" : "bg-surface-100 text-gray-700 hover:bg-surface-200 border border-surface-200"
                       }`}
                     >
                       Light

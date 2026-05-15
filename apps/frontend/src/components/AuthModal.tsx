@@ -79,23 +79,23 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          transition={{ duration: 0.25 }}
+          className="fixed inset-0 bg-surface-950/80 backdrop-blur-2xl flex items-center justify-center z-50 p-4"
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className={`${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-surface-200"} rounded-2xl shadow-2xl w-full max-w-md relative border overflow-hidden`}
+            initial={{ opacity: 0, scale: 0.92, y: 24, filter: 'blur(12px)' }}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 0.95, y: 12, filter: 'blur(8px)' }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className={`${isDark ? "text-white glass-panel" : "text-gray-900 glass-panel-light"} rounded-2xl w-full max-w-md relative overflow-hidden`}
           >
-            {/* Gradient top accent */}
-            <div className="h-1 bg-gradient-brand" />
+            {/* Holographic top accent */}
+            <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #00f0ff, #bf5af2, #ff2d55, #30d158, #00f0ff)', backgroundSize: '200% 100%', animation: 'text-shimmer 3s ease-in-out infinite' }} />
 
             {/* Close button */}
             <button
               onClick={onClose}
-              className={`absolute top-5 right-4 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"} transition-colors p-1 rounded-lg hover:bg-surface-700/50`}
+              className={`absolute top-5 right-4 ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"} transition-all duration-300 p-2 rounded-xl hover:bg-white/10 hover:rotate-90`}
             >
               <AiOutlineClose size={20} />
             </button>
@@ -134,7 +134,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Enter your name"
                         required
-                        className={`w-full pl-10 pr-4 py-2.5 ${isDark ? "bg-surface-700 border-surface-700 text-white placeholder-gray-500" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 hover:border-brand-400"} border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition`}
+                        className={`w-full pl-10 pr-4 py-2.5 ${isDark ? "bg-surface-900/50 border-[rgba(0,240,255,0.1)] text-white placeholder-gray-500" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 hover:border-brand-400"} border rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(0,240,255,0.3)] focus:border-[rgba(0,240,255,0.3)] transition-all duration-300`}
                       />
                     </div>
                   </motion.div>
@@ -153,7 +153,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
                     required
-                    className={`w-full pl-10 pr-4 py-2.5 ${isDark ? "bg-surface-700 border-surface-700 text-white placeholder-gray-500" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 hover:border-brand-400"} border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition`}
+                    className={`w-full pl-10 pr-4 py-2.5 ${isDark ? "bg-surface-900/50 border-[rgba(0,240,255,0.1)] text-white placeholder-gray-500" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 hover:border-brand-400"} border rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(0,240,255,0.3)] focus:border-[rgba(0,240,255,0.3)] transition-all duration-300`}
                   />
                 </div>
               </div>
@@ -171,7 +171,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                     placeholder={isSignUp ? "At least 6 characters" : "Enter your password"}
                     required
                     minLength={isSignUp ? 6 : undefined}
-                    className={`w-full pl-10 pr-4 py-2.5 ${isDark ? "bg-surface-700 border-surface-700 text-white placeholder-gray-500" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 hover:border-brand-400"} border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition`}
+                    className={`w-full pl-10 pr-4 py-2.5 ${isDark ? "bg-surface-900/50 border-[rgba(191,90,242,0.1)] text-white placeholder-gray-500" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 hover:border-brand-400"} border rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(191,90,242,0.3)] focus:border-[rgba(191,90,242,0.3)] transition-all duration-300`}
                   />
                 </div>
               </div>
@@ -187,11 +187,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
               )}
 
               <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.97 }}
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white font-semibold py-2.5 px-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-glow-brand"
+                className="w-full bg-gradient-to-r from-[rgba(0,240,255,0.2)] to-[rgba(191,90,242,0.2)] border border-[rgba(0,240,255,0.3)] hover:border-[rgba(0,240,255,0.5)] text-white font-semibold py-2.5 px-4 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-glow-neon backdrop-blur-sm"
               >
                 {loading ? "Processing..." : isSignUp ? "Sign Up" : "Sign In"}
               </motion.button>

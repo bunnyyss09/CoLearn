@@ -189,18 +189,18 @@ const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          transition={{ duration: 0.25 }}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-2xl flex items-center justify-center p-4"
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className={`${isDark ? "bg-surface-800 border-surface-700" : "bg-white border-surface-200"} border rounded-2xl shadow-2xl w-full max-w-md relative overflow-hidden`}
+            initial={{ opacity: 0, scale: 0.92, y: 24, filter: 'blur(12px)' }}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 0.95, y: 12, filter: 'blur(8px)' }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className={`${isDark ? "glass-panel" : "glass-panel-light"} rounded-2xl w-full max-w-md relative overflow-hidden`}
           >
-            {/* Gradient top accent */}
-            <div className="h-1 bg-gradient-brand" />
+            {/* Holographic top accent */}
+            <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #00f0ff, #bf5af2, #ff2d55, #30d158, #00f0ff)', backgroundSize: '200% 100%', animation: 'text-shimmer 3s ease-in-out infinite' }} />
 
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
